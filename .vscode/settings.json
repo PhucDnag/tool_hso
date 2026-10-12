@@ -1,0 +1,16 @@
+{
+    "java.project.sourcePaths": ["src_decompiled"],
+    "java.project.referencedLibraries": [
+        "KnightOnline_v403_original.jar",
+        "microemulator.jar"
+    ],
+    "java.errors.incompleteClasspath.severity": "ignore",
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true
+    }
+}
