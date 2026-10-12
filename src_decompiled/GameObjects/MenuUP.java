@@ -17,7 +17,10 @@ import InterfaceComponents.MsgDialog;
 import InterfaceComponents.iCommand;
 import Main.GameCanvas;
 import Main.GameMidlet;
+import GameObjects.MainObject;
+import GameScreen.LoadMapScreen;
 import Model.CRes;
+import Model.Point;
 import Model.T;
 import Skill.HotKey;
 import Thread_More.LoadMap;
@@ -25,7 +28,7 @@ import netcommand.global.GlobalService;
 
 public class MenuUP {
     public static final String AUTHOR = "HONG PHUC HSO";
-    public static final String VERSION = "v1.5";
+    public static final String VERSION = "v1.6";
 
     // 1. Auto Reconnect (Tự động đăng nhập lại khi mất kết nối)
     public static boolean isAutoReconnect = true;
@@ -64,6 +67,142 @@ public class MenuUP {
     public static int autoMountCustomId = -1;
     public static String autoMountCustomName = "";
     public static long lastMountAttemptTime = 0L;
+
+    // 6. GoBack (Tự động tìm đường về Map UP khi bị kết nối về làng hoặc rời map)
+    public static boolean isGoBackEnabled = true;
+    public static boolean isGoBackActive = false;
+    public static boolean isGoBackPaused = false;
+    public static int farmMapId = -1;
+    public static String farmMapName = "";
+    public static int farmX = 0;
+    public static int farmY = 0;
+    public static int farmArea = 0;
+    public static String goBackStepInfo = "";
+    public static boolean isWaitingMapChange = false;
+    public static long lastMapChangeTime = 0L;
+    public static long lastAreaChangeTime = 0L;
+    public static int lastStuckCheckX = 0;
+    public static int lastStuckCheckY = 0;
+    public static long lastStuckCheckTime = 0L;
+    public static mVector learnedConnections = new mVector("LearnedMapConnections");
+    public static mVector learnedPortals = new mVector("LearnedPortals");
+
+    public static boolean isVillage(int mapId) {
+        return mapId == 0 || mapId == 1 || mapId == 54 || mapId == 56 || mapId == 58 || mapId == 60;
+    }
+
+    public static final int[][] POPULAR_FARM_MAPS = new int[][]{
+        {3, 400, 350},   // Bia Rung (lv 1-10)
+        {4, 300, 300},   // Hang Lua (lv 10-15)
+        {5, 500, 400},   // Rung Ao Giac (lv 15-20)
+        {7, 450, 400},   // Canh Dong Soi (lv 20-25)
+        {8, 400, 350},   // Thung Lung Ky Bi (lv 25-30)
+        {9, 500, 400},   // Ho Ky Uc (lv 30-35)
+        {11, 600, 400},  // Bo Bien (lv 35-40)
+        {12, 500, 400},  // Vuc Da (lv 40-45)
+        {14, 500, 400},  // Nghia Dia Tau Dam (lv 45-50)
+        {15, 600, 400},  // Dam Lay (lv 50-55)
+        {20, 600, 400},  // Sa Mac (lv 55-60)
+        {21, 600, 400},  // Doi Cat (lv 60-65)
+        {22, 600, 400},  // Vuc Lun (lv 65-70)
+        {24, 600, 400},  // Nghia Dia Cat (lv 70-75)
+        {25, 600, 400},  // Rung Chet (lv 75-80)
+        {26, 600, 400},  // Suoi Ma (lv 80-85)
+        {27, 600, 400},  // Thung Lung Da (lv 85-90)
+        {29, 600, 400},  // Ham Mo Tang 1 (lv 90-95)
+        {37, 600, 400},  // Rung Cao Nguyen
+        {71, 600, 400},  // Rung Chuot
+        {72, 600, 400},  // Rung Hoa Do
+        {73, 600, 400}   // Vinh Caribe
+    };
+
+    public static final int[][] MAP_CONNECTIONS = new int[][]{
+        // Khu vuc Lang Soi Trang & lan can
+        {0, 1},   // Ngoi Lang Nho <-> Lang Soi Trang
+        {0, 3},   // Ngoi Lang Nho <-> Bia Rung
+        {1, 2},   // Lang Soi Trang <-> Khu mo
+        {1, 3},   // Lang Soi Trang <-> Bia Rung
+        {3, 4},   // Bia Rung <-> Hang Lua
+        {3, 5},   // Bia Rung <-> Rung Ao Giac
+        {5, 6},   // Rung Ao Giac <-> Khe Vuc
+        {5, 7},   // Rung Ao Giac <-> Canh Dong Soi
+        {7, 8},   // Canh Dong Soi <-> Thung Lung Ky Bi
+        {7, 17},  // Canh Dong Soi <-> Hang Doi
+        {7, 18},  // Canh Dong Soi <-> Hang Soi Quy
+        {8, 9},   // Thung Lung Ky Bi <-> Ho Ky Uc
+        {8, 10},  // Thung Lung Ky Bi <-> Bai Dat Trong
+        {9, 11},  // Ho Ky Uc <-> Bo Bien
+        {11, 12}, // Bo Bien <-> Vuc Da
+        {11, 19}, // Bo Bien <-> Cua Bien
+        {12, 13}, // Vuc Da <-> Rang Da Ngam
+        {13, 14}, // Rang Da Ngam <-> Nghia Dia Tau Dam
+        {14, 15}, // Nghia Dia Tau Dam <-> Dam Lay
+        {15, 16}, // Dam Lay <-> Den Co
+
+        // Khu vuc Sa Mac & Ham Mo
+        {19, 20}, // Cua Bien <-> Sa Mac
+        {20, 21}, // Sa Mac <-> Doi Cat
+        {21, 22}, // Doi Cat <-> Vuc Lun
+        {22, 23}, // Vuc Lun <-> Ho Tu Than
+        {23, 24}, // Ho Tu Than <-> Nghia dia cat
+        {24, 25}, // Nghia dia cat <-> Rung Chet
+        {25, 26}, // Rung Chet <-> Suoi Ma
+        {26, 27}, // Suoi Ma <-> Thung Lung Da
+        {27, 28}, // Thung Lung Da <-> Boss Guardian
+        {27, 29}, // Thung Lung Da <-> Ham Mo Tang 1
+        {27, 33}, // Thung Lung Da <-> Thanh Pho Kho Bau
+        {29, 30}, // Ham Mo Tang 1 <-> Ham Mo Tang 2
+        {30, 31}, // Ham Mo Tang 2 <-> Ham Mo Tang 3
+        {31, 32}, // Ham Mo Tang 3 <-> Ham mo quai vat
+
+        // 4 Truong hoc / Lang khoi dau
+        {54, 3},  // Lang Anh Sang <-> Bia Rung
+        {54, 1},  // Lang Anh Sang <-> Lang Soi Trang
+        {56, 3},  // Lang Gio <-> Bia Rung
+        {56, 1},  // Lang Gio <-> Lang Soi Trang
+        {58, 3},  // Lang Set <-> Bia Rung
+        {58, 1},  // Lang Set <-> Lang Soi Trang
+        {60, 3},  // Lang Lua <-> Bia Rung
+        {60, 1},  // Lang Lua <-> Lang Soi Trang
+
+        // Thanh Pho Kho Bau & Nui Cao Nguyen
+        {33, 1},  // Thanh Pho Kho Bau <-> Lang Soi Trang
+        {33, 3},  // Thanh Pho Kho Bau <-> Bia Rung
+        {33, 27}, // Thanh Pho Kho Bau <-> Thung Lung Da
+        {33, 34}, // Thanh Pho Kho Bau <-> Khu phia Tay
+        {33, 35}, // Thanh Pho Kho Bau <-> Khu phia Dong
+        {33, 37}, // Thanh Pho Kho Bau <-> Rung cao nguyen
+        {33, 67}, // Thanh Pho Kho Bau <-> Thanh pho cang
+        {37, 38}, // Rung cao nguyen <-> Con duong hiem tro
+        {38, 39}, // Con duong hiem tro <-> Vach da cheo leo
+        {39, 40}, // Vach da cheo leo <-> Nui Cau Vong
+        {40, 41}, // Nui Cau Vong <-> Loi len Thuong gioi
+        {40, 42}, // Nui Cau Vong <-> Deo hoang so
+        {41, 51}, // Loi len Thuong gioi <-> Cong thien dang
+        {42, 43}, // Deo hoang so <-> Duong xuong long dat
+        {43, 44}, // Duong xuong long dat <-> Cay cau ma am
+        {44, 45}, // Cay cau ma am <-> Cong vao Ha gioi
+        {45, 52}, // Cong vao Ha gioi <-> Cong dia nguc
+        {45, 62}, // Cong vao Ha gioi <-> Dia nguc tang 1
+        {47, 48}, // Doi xac chet <-> Nga tu tu than
+
+        // Thanh Pho Cang & Me Cung
+        {67, 11}, // Thanh pho cang <-> Bo Bien
+        {67, 33}, // Thanh pho cang <-> Thanh Pho Kho Bau
+        {67, 68}, // Thanh pho cang <-> Khu bo nam
+        {67, 69}, // Thanh pho cang <-> Khu bo bac
+        {67, 70}, // Thanh pho cang <-> Khu bo tay
+        {69, 66}, // Khu bo bac <-> Thac reo
+        {68, 71}, // Khu bo nam <-> Rung chuot
+        {71, 72}, // Rung chuot <-> Rung hoa do
+        {72, 73}, // Rung hoa do <-> Vinh Caribe
+        {73, 74}, // Vinh Caribe <-> Me cung
+        {74, 75}, // Me cung <-> Me cung tang 1
+        {75, 76}, // Me cung tang 1 <-> Me cung tang 2
+        {76, 77}, // Me cung tang 2 <-> Me cung tang 3
+        {77, 78}, // Me cung tang 3 <-> Me cung tang 4
+        {78, 79}  // Me cung tang 4 <-> Me cung tang cuoi
+    };
 
     // HUD box coordinates
     public static int hudBoxW = 260;
@@ -157,6 +296,52 @@ public class MenuUP {
             if (sCustomName != null && sCustomName.trim().length() > 0) {
                 autoMountCustomName = sCustomName.trim();
             }
+
+            // Load GoBack
+            String sGb = CRes.loadRMSString("hso_up_goback_en");
+            if (sGb != null && sGb.trim().length() > 0) {
+                isGoBackEnabled = sGb.trim().equals("1");
+            }
+            String sGmap = CRes.loadRMSString("hso_up_goback_map");
+            if (sGmap != null && sGmap.trim().length() > 0) {
+                try {
+                    farmMapId = Integer.parseInt(sGmap.trim());
+                }
+                catch (Exception exception) {
+                    // empty catch block
+                }
+            }
+            String sGx = CRes.loadRMSString("hso_up_goback_x");
+            if (sGx != null && sGx.trim().length() > 0) {
+                try {
+                    farmX = Integer.parseInt(sGx.trim());
+                }
+                catch (Exception exception) {
+                    // empty catch block
+                }
+            }
+            String sGy = CRes.loadRMSString("hso_up_goback_y");
+            if (sGy != null && sGy.trim().length() > 0) {
+                try {
+                    farmY = Integer.parseInt(sGy.trim());
+                }
+                catch (Exception exception) {
+                    // empty catch block
+                }
+            }
+            String sGarea = CRes.loadRMSString("hso_up_goback_area");
+            if (sGarea != null && sGarea.trim().length() > 0) {
+                try {
+                    farmArea = Integer.parseInt(sGarea.trim());
+                }
+                catch (Exception exception) {
+                    // empty catch block
+                }
+            }
+            String sGname = CRes.loadRMSString("hso_up_goback_name");
+            if (sGname != null && sGname.trim().length() > 0) {
+                farmMapName = sGname.trim();
+            }
         }
         catch (Exception exception) {
             // empty catch block
@@ -181,6 +366,14 @@ public class MenuUP {
             CRes.saveRMSString_("hso_up_mount_cid", String.valueOf(autoMountCustomId));
             if (autoMountCustomName != null && autoMountCustomName.length() > 0) {
                 CRes.saveRMSString_("hso_up_mount_cname", autoMountCustomName);
+            }
+            CRes.saveRMSString_("hso_up_goback_en", isGoBackEnabled ? "1" : "0");
+            CRes.saveRMSString_("hso_up_goback_map", String.valueOf(farmMapId));
+            CRes.saveRMSString_("hso_up_goback_x", String.valueOf(farmX));
+            CRes.saveRMSString_("hso_up_goback_y", String.valueOf(farmY));
+            CRes.saveRMSString_("hso_up_goback_area", String.valueOf(farmArea));
+            if (farmMapName != null && farmMapName.length() > 0) {
+                CRes.saveRMSString_("hso_up_goback_name", farmMapName);
             }
         }
         catch (Exception exception) {
@@ -605,6 +798,9 @@ public class MenuUP {
             } else if (reviveState == 1 && GameCanvas.isPoint(hudX, 28, hudBoxW, hudBoxH)) {
                 GameCanvas.isPointerSelect = false;
                 cancelRevive();
+            } else if (isGoBackActive && !isWaitingReconnect && reviveState != 1 && GameCanvas.isPoint(hudX, 6, hudBoxW, hudBoxH)) {
+                GameCanvas.isPointerSelect = false;
+                cancelGoBack();
             }
         }
 
@@ -643,9 +839,17 @@ public class MenuUP {
         if (autoMountType > 0 && GameCanvas.currentScreen == GameCanvas.game && GameScreen.player != null && GameScreen.player.Action != 4) {
             updateAutoMount();
         }
+
+        // 9. Xu ly GoBack ve Map UP
+        if (isGoBackEnabled && farmMapId >= 0 && GameCanvas.currentScreen == GameCanvas.game && GameScreen.player != null && GameScreen.player.Action != 4) {
+            updateGoBack();
+        }
     }
 
     private static void updateAutoAttack() {
+        if (isGoBackActive) {
+            return;
+        }
         Player player = GameScreen.player;
         if (player == null || player.Action == 4) {
             return;
@@ -898,6 +1102,26 @@ public class MenuUP {
                 mFont.tahoma_7b_green.drawString(g, "[HSO] \u0110ang th\u1ef1c hi\u1ec7n h\u1ed3i sinh...", GameCanvas.hw, boxY + 7, 2, false);
             }
         }
+
+        // 3. HUD GoBack (Tu ve Map UP)
+        if (isGoBackActive && !isWaitingReconnect && reviveState != 1) {
+            int boxY = 6;
+            g.setColor(0x151515);
+            g.fillRect(boxX, boxY, hudBoxW, hudBoxH, false);
+            g.setColor(0x00E5FF);
+            g.drawRect(boxX, boxY, hudBoxW, hudBoxH, false);
+            g.setColor(0x003344);
+            g.drawRect(boxX + 1, boxY + 1, hudBoxW - 2, hudBoxH - 2, false);
+
+            mFont.tahoma_7b_yellow.drawString(g, "[HONG PHUC HSO] GOBACK", GameCanvas.hw, boxY + 4, 2, false);
+            String status = "V\u1ec1: " + (farmMapName.length() > 0 ? farmMapName : ("Map " + farmMapId)) + " (Khu " + farmArea + ")";
+            if (goBackStepInfo != null && goBackStepInfo.length() > 0) {
+                mFont.tahoma_7_white.drawString(g, status + " | " + goBackStepInfo, GameCanvas.hw, boxY + 17, 2, false);
+            } else {
+                mFont.tahoma_7_white.drawString(g, status, GameCanvas.hw, boxY + 17, 2, false);
+            }
+            mFont.tahoma_7_yellow.drawString(g, "(Ch\u1ea1m v\u00e0o \u0111\u00e2y \u0111\u1ec3 H\u1ee6Y)", GameCanvas.hw, boxY + 30, 2, false);
+        }
     }
 
     public static void toggleAutoReconnect() {
@@ -925,6 +1149,11 @@ public class MenuUP {
         isAutoAttack = !isAutoAttack;
         saveConfig();
         if (isAutoAttack) {
+            if (farmMapId < 0 && GameCanvas.currentScreen == GameCanvas.game && GameScreen.player != null && GameCanvas.loadmap != null) {
+                if (!isVillage(GameCanvas.loadmap.idMap)) {
+                    saveCurrentFarmLocation();
+                }
+            }
             if (GameCanvas.currentScreen == GameCanvas.game && GameScreen.player != null) {
                 GameScreen.player.dofire_();
                 Player.xBeginAutoFire = GameScreen.player.x;
@@ -1243,13 +1472,736 @@ public class MenuUP {
         GameCanvas.menu2.startAt(mVector2, 2, "CH\u1eccN TH\u00da C\u01af\u1ee0I", false, null);
     }
 
+    // ==========================================
+    // CÁC THUẬT TOÁN VÀ HÀM HỖ TRỢ GOBACK
+    // ==========================================
+
+    public static String stripAccents(String s) {
+        if (s == null) {
+            return "";
+        }
+        StringBuffer sb = new StringBuffer();
+        for (int i = 0; i < s.length(); ++i) {
+            char c = s.charAt(i);
+            // Bo qua cac dau ket hop trong chuoi Unicode UTF-8
+            if (c >= '\u0300' && c <= '\u036f') {
+                continue;
+            }
+            c = Character.toLowerCase(c);
+            switch (c) {
+                case '\u00e0': case '\u00e1': case '\u1ea1': case '\u1ea3': case '\u00e3':
+                case '\u00e2': case '\u1ea7': case '\u1ea5': case '\u1ead': case '\u1ea9': case '\u1eab':
+                case '\u0103': case '\u1eb1': case '\u1eaf': case '\u1eb7': case '\u1eb3': case '\u1eb5':
+                    sb.append('a'); break;
+                case '\u00e8': case '\u00e9': case '\u1eb9': case '\u1ebb': case '\u1ebd':
+                case '\u00ea': case '\u1ec1': case '\u1ebf': case '\u1ec7': case '\u1ec3': case '\u1ec5':
+                    sb.append('e'); break;
+                case '\u00ec': case '\u00ed': case '\u1ecb': case '\u1ec9': case '\u0129':
+                    sb.append('i'); break;
+                case '\u00f2': case '\u00f3': case '\u1ecd': case '\u1ecf': case '\u00f5':
+                case '\u00f4': case '\u1ed3': case '\u1ed1': case '\u1ed9': case '\u1ed5': case '\u1ed7':
+                case '\u01a1': case '\u1edd': case '\u1edb': case '\u1ee3': case '\u1edf': case '\u1ee1':
+                    sb.append('o'); break;
+                case '\u00f9': case '\u00fa': case '\u1ee5': case '\u1ee7': case '\u0169':
+                case '\u01b0': case '\u1eeb': case '\u1ee9': case '\u1ef1': case '\u1eed': case '\u1eef':
+                    sb.append('u'); break;
+                case '\u1ef3': case '\u00fd': case '\u1ef5': case '\u1ef7': case '\u1ef9':
+                    sb.append('y'); break;
+                case '\u0111': case '\u0110':
+                    sb.append('d'); break;
+                default:
+                    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == ' ') {
+                        sb.append(c);
+                    }
+                    break;
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    public static String getMapName(int mapId) {
+        if (mapId >= 0 && T.mapName != null && mapId < T.mapName.length && T.mapName[mapId] != null && T.mapName[mapId].length() > 0) {
+            return T.mapName[mapId];
+        }
+        return "Map " + mapId;
+    }
+
+    public static int getMapIdByName(String name) {
+        if (name == null || name.trim().length() == 0 || T.mapName == null) {
+            return -1;
+        }
+        String stripped = stripAccents(name);
+        for (int i = 0; i < T.mapName.length; ++i) {
+            if (T.mapName[i] != null && T.mapName[i].trim().length() > 0) {
+                String mapStripped = stripAccents(T.mapName[i]);
+                if (mapStripped.equals(stripped)) {
+                    return i;
+                }
+            }
+        }
+        for (int i = 0; i < T.mapName.length; ++i) {
+            if (T.mapName[i] != null && T.mapName[i].trim().length() > 0) {
+                String mapStripped = stripAccents(T.mapName[i]);
+                if (stripped.indexOf(mapStripped) != -1 || mapStripped.indexOf(stripped) != -1) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    public static void addConnection(int m1, int m2) {
+        if (m1 < 0 || m2 < 0 || m1 == m2) {
+            return;
+        }
+        for (int i = 0; i < MAP_CONNECTIONS.length; ++i) {
+            if ((MAP_CONNECTIONS[i][0] == m1 && MAP_CONNECTIONS[i][1] == m2)
+                || (MAP_CONNECTIONS[i][0] == m2 && MAP_CONNECTIONS[i][1] == m1)) {
+                return;
+            }
+        }
+        if (learnedConnections != null) {
+            for (int i = 0; i < learnedConnections.size(); ++i) {
+                int[] pair = (int[])learnedConnections.elementAt(i);
+                if ((pair[0] == m1 && pair[1] == m2) || (pair[0] == m2 && pair[1] == m1)) {
+                    return;
+                }
+            }
+            learnedConnections.addElement(new int[]{m1, m2});
+        }
+    }
+
+    public static void recordLearnedPortal(int fromMap, int toMap, int px, int py) {
+        if (learnedPortals == null) {
+            learnedPortals = new mVector("LearnedPortals");
+        }
+        for (int i = 0; i < learnedPortals.size(); ++i) {
+            int[] data = (int[])learnedPortals.elementAt(i);
+            if (data[0] == fromMap && data[1] == toMap) {
+                data[2] = px;
+                data[3] = py;
+                return;
+            }
+        }
+        learnedPortals.addElement(new int[]{fromMap, toMap, px, py});
+    }
+
+    public static int[] getNeighbors(int mapId) {
+        int[] temp = new int[64];
+        int count = 0;
+        for (int i = 0; i < MAP_CONNECTIONS.length; ++i) {
+            if (MAP_CONNECTIONS[i][0] == mapId) {
+                temp[count++] = MAP_CONNECTIONS[i][1];
+            } else if (MAP_CONNECTIONS[i][1] == mapId) {
+                temp[count++] = MAP_CONNECTIONS[i][0];
+            }
+        }
+        if (learnedConnections != null) {
+            for (int i = 0; i < learnedConnections.size(); ++i) {
+                int[] pair = (int[])learnedConnections.elementAt(i);
+                if (pair[0] == mapId) {
+                    temp[count++] = pair[1];
+                } else if (pair[1] == mapId) {
+                    temp[count++] = pair[0];
+                }
+            }
+        }
+        int[] res = new int[count];
+        System.arraycopy(temp, 0, res, 0, count);
+        return res;
+    }
+
+    // Thuat toan BFS tim duong di ngan nhat giua 2 Map trong Knight Online
+    public static int[] getMapPath(int startMap, int endMap) {
+        if (startMap == endMap || startMap < 0 || endMap < 0) {
+            return null;
+        }
+        int maxMap = 95;
+        int[] queue = new int[256];
+        int head = 0;
+        int tail = 0;
+        int[] parent = new int[maxMap];
+        boolean[] visited = new boolean[maxMap];
+        for (int i = 0; i < maxMap; ++i) {
+            parent[i] = -1;
+            visited[i] = false;
+        }
+
+        visited[startMap] = true;
+        queue[tail++] = startMap;
+
+        boolean found = false;
+        while (head < tail) {
+            int curr = queue[head++];
+            if (curr == endMap) {
+                found = true;
+                break;
+            }
+            int[] neighbors = getNeighbors(curr);
+            if (neighbors != null) {
+                for (int i = 0; i < neighbors.length; ++i) {
+                    int next = neighbors[i];
+                    if (next >= 0 && next < maxMap && !visited[next]) {
+                        visited[next] = true;
+                        parent[next] = curr;
+                        queue[tail++] = next;
+                    }
+                }
+            }
+        }
+
+        if (!found) {
+            return null;
+        }
+
+        int count = 0;
+        int curr = endMap;
+        while (curr != -1) {
+            ++count;
+            curr = parent[curr];
+        }
+
+        int[] path = new int[count];
+        curr = endMap;
+        for (int i = count - 1; i >= 0; --i) {
+            path[i] = curr;
+            curr = parent[curr];
+        }
+        return path;
+    }
+
+    public static void learnPortalsInCurrentMap(int currMap) {
+        try {
+            if (LoadMap.vecPointChange == null || LoadMap.vecPointChange.size() == 0) {
+                return;
+            }
+            for (int i = 0; i < LoadMap.vecPointChange.size(); ++i) {
+                Point p = (Point)LoadMap.vecPointChange.elementAt(i);
+                if (p != null && p.name != null && p.name.trim().length() > 0) {
+                    int targetMap = getMapIdByName(p.name);
+                    if (targetMap >= 0 && targetMap != currMap) {
+                        addConnection(currMap, targetMap);
+                    }
+                }
+            }
+        }
+        catch (Exception exception) {
+            // empty catch block
+        }
+    }
+
+    public static Point findPortalToMap(int targetMapId) {
+        try {
+            if (LoadMap.vecPointChange == null || LoadMap.vecPointChange.size() == 0 || targetMapId < 0) {
+                return null;
+            }
+            String targetName = getMapName(targetMapId);
+            String targetStripped = stripAccents(targetName);
+
+            // 1. So khop chinh xac hoac bo dau
+            for (int i = 0; i < LoadMap.vecPointChange.size(); ++i) {
+                Point p = (Point)LoadMap.vecPointChange.elementAt(i);
+                if (p != null && p.name != null) {
+                    String pStripped = stripAccents(p.name);
+                    if (pStripped.equals(targetStripped)) {
+                        return p;
+                    }
+                }
+            }
+
+            // 2. So khop chuoi con
+            for (int i = 0; i < LoadMap.vecPointChange.size(); ++i) {
+                Point p = (Point)LoadMap.vecPointChange.elementAt(i);
+                if (p != null && p.name != null) {
+                    String pStripped = stripAccents(p.name);
+                    if (pStripped.indexOf(targetStripped) != -1 || targetStripped.indexOf(pStripped) != -1) {
+                        return p;
+                    }
+                }
+            }
+        }
+        catch (Exception exception) {
+            // empty catch block
+        }
+        return null;
+    }
+
+    // Lua chon cong chuyen map thich hop nhat khi so khop ten that bai
+    public static Point selectBestPortal(int currMap, int nextMapId) {
+        if (LoadMap.vecPointChange == null || LoadMap.vecPointChange.size() == 0) {
+            return null;
+        }
+        if (LoadMap.vecPointChange.size() == 1) {
+            return (Point)LoadMap.vecPointChange.elementAt(0);
+        }
+
+        // 1. Kiem tra cong da tung hoc duoc toa do
+        if (learnedPortals != null) {
+            for (int i = 0; i < learnedPortals.size(); ++i) {
+                int[] pData = (int[])learnedPortals.elementAt(i);
+                if (pData[0] == currMap && pData[1] == nextMapId) {
+                    Point best = null;
+                    int minD = 999999;
+                    for (int j = 0; j < LoadMap.vecPointChange.size(); ++j) {
+                        Point p = (Point)LoadMap.vecPointChange.elementAt(j);
+                        int d = MainObject.getDistance(p.x, p.y, pData[2], pData[3]);
+                        if (d < minD) {
+                            minD = d;
+                            best = p;
+                        }
+                    }
+                    if (best != null && minD < 100) {
+                        return best;
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback dac biet o Lang Soi Trang (1): Cong Bia Rung (3) nam o phia ben phai (x lon nhat)
+        if (currMap == 1 && nextMapId == 3) {
+            Point best = (Point)LoadMap.vecPointChange.elementAt(0);
+            for (int i = 1; i < LoadMap.vecPointChange.size(); ++i) {
+                Point p = (Point)LoadMap.vecPointChange.elementAt(i);
+                if (p.x > best.x) {
+                    best = p;
+                }
+            }
+            return best;
+        }
+
+        // 3. Fallback theo huong tien/lui ID map
+        if (nextMapId > currMap) {
+            Point best = (Point)LoadMap.vecPointChange.elementAt(0);
+            for (int i = 1; i < LoadMap.vecPointChange.size(); ++i) {
+                Point p = (Point)LoadMap.vecPointChange.elementAt(i);
+                if (p.x > best.x) {
+                    best = p;
+                }
+            }
+            return best;
+        } else {
+            Point best = (Point)LoadMap.vecPointChange.elementAt(0);
+            for (int i = 1; i < LoadMap.vecPointChange.size(); ++i) {
+                Point p = (Point)LoadMap.vecPointChange.elementAt(i);
+                if (p.x < best.x) {
+                    best = p;
+                }
+            }
+            return best;
+        }
+    }
+
+    // He thong di chuyen da cap (Multi-Tier Movement) giup nhan vat 100% khong dung im o lang
+    public static void moveToPosition(int targetX, int targetY) {
+        Player player = GameScreen.player;
+        if (player == null) {
+            return;
+        }
+
+        long now = mSystem.currentTimeMillis();
+
+        // 1. Kiem tra va cap nhat trang thai chong ket (Anti-stuck)
+        int distMoved = MainObject.getDistance(player.x, player.y, lastStuckCheckX, lastStuckCheckY);
+        if (distMoved > 16) {
+            lastStuckCheckX = player.x;
+            lastStuckCheckY = player.y;
+            lastStuckCheckTime = now;
+        } else if (now - lastStuckCheckTime > 3000L) {
+            // Bi ket tren 3 giay: Xoa posTransRoad va nhich nhe ve huong muc tieu
+            player.posTransRoad = null;
+            lastStuckCheckTime = now;
+            int stepX = (targetX > player.x) ? 12 : -12;
+            int stepY = (targetY > player.y) ? 12 : -12;
+            player.x += stepX;
+            player.y += stepY;
+            player.toX = player.x;
+            player.toY = player.y;
+            GlobalService.gI().player_move((short)player.x, (short)player.y);
+            return;
+        }
+
+        // 2. Neu dang co posTransRoad hop le va dang chay, de Player.update() tiep tuc xu ly
+        if (player.posTransRoad != null && player.posTransRoad.length > 0) {
+            player.move_to_XY();
+            return;
+        }
+
+        // 3. Chua co posTransRoad: Sinh duong di theo 3 cap do (3-Tier Pathfinding)
+        short[] road = null;
+        int tileTargetX = targetX / LoadMap.wTile;
+        int tileTargetY = targetY / LoadMap.wTile;
+        int tilePlayerX = player.x / LoadMap.wTile;
+        int tilePlayerY = player.y / LoadMap.wTile;
+
+        // Cap 1: Thu dung A* toan bo ban do (tam 100 o)
+        try {
+            road = GameCanvas.game.updateFindRoad(tileTargetX, tileTargetY, tilePlayerX, tilePlayerY, 100);
+            if (road != null && road.length > 100) {
+                road = null;
+            }
+        } catch (Exception ex) {
+            road = null;
+        }
+
+        // Cap 2: Neu khoang cach xa hoac Cap 1 that bai, tim waypoint trung gian cach 15 o
+        if (road == null || road.length == 0) {
+            try {
+                int dx = tileTargetX - tilePlayerX;
+                int dy = tileTargetY - tilePlayerY;
+                int distTiles = (int)Math.sqrt(dx * dx + dy * dy);
+                if (distTiles > 0) {
+                    int step = 15;
+                    if (step > distTiles) step = distTiles;
+                    int midX = tilePlayerX + (dx * step / distTiles);
+                    int midY = tilePlayerY + (dy * step / distTiles);
+                    road = GameCanvas.game.updateFindRoad(midX, midY, tilePlayerX, tilePlayerY, 30);
+                    if (road != null && road.length > 30) {
+                        road = null;
+                    }
+                }
+            } catch (Exception ex) {
+                road = null;
+            }
+        }
+
+        // Cap 3: Duong di truc tiep (Direct Stepping Road) dam bao 100% LUON CO DUONG
+        if (road == null || road.length == 0) {
+            int dx = tileTargetX - tilePlayerX;
+            int dy = tileTargetY - tilePlayerY;
+            int distTiles = (int)Math.sqrt(dx * dx + dy * dy);
+            int steps = 10;
+            if (steps > distTiles) steps = distTiles;
+            if (steps < 1) steps = 1;
+            road = new short[steps];
+            for (int s = 0; s < steps; ++s) {
+                int tx = tilePlayerX + (dx * (s + 1) / (distTiles == 0 ? 1 : distTiles));
+                int ty = tilePlayerY + (dy * (s + 1) / (distTiles == 0 ? 1 : distTiles));
+                road[s] = (short)(((tx & 0xFF) << 8) | (ty & 0xFF));
+            }
+        }
+
+        // 4. KHOI TAO DUONG DI CHO PLAYER - QUAN TRONG NHAT DE KHONG DUNG IM
+        if (road != null && road.length > 0) {
+            player.toX = player.x;
+            player.toY = player.y;
+            player.posTransRoad = road;
+            player.countAutoMove = 0;
+            player.xStopMove = targetX;
+            player.yStopMove = targetY;
+            player.move_to_XY();
+        }
+    }
+
+    public static void updateGoBack() {
+        if (!isGoBackEnabled || farmMapId < 0 || isGoBackPaused) {
+            return;
+        }
+
+        if (GameCanvas.currentScreen != GameCanvas.game || GameScreen.player == null) {
+            return;
+        }
+
+        if (LoadMapScreen.isNextMap) {
+            return;
+        }
+
+        Player player = GameScreen.player;
+        if (player.hp <= 0 || player.Action == 4) {
+            return;
+        }
+
+        int currMap = (GameCanvas.loadmap != null) ? GameCanvas.loadmap.idMap : -1;
+        if (currMap < 0) {
+            return;
+        }
+
+        // 1. Hoc them cac cong chuyen map hien tai vao so do BFS
+        learnPortalsInCurrentMap(currMap);
+
+        // 2. Kiem tra da den Map UP muc tieu chua
+        if (currMap == farmMapId) {
+            // Kiem tra doi Khu / Area neu duoc chi dinh
+            if (farmArea >= 0 && LoadMap.Area != farmArea) {
+                long now = mSystem.currentTimeMillis();
+                if (now - lastAreaChangeTime > 3000L) {
+                    lastAreaChangeTime = now;
+                    goBackStepInfo = "\u0110ang \u0111\u1ed5i sang Khu " + farmArea + "...";
+                    GlobalService.gI().Change_Area((byte)farmArea);
+                }
+                return;
+            }
+
+            // Da dung map va khu: Di chuyen den toa do (farmX, farmY)
+            int dist = MainObject.getDistance(player.x, player.y, farmX, farmY);
+            if (farmX > 0 && farmY > 0 && dist > 50) {
+                isGoBackActive = true;
+                goBackStepInfo = "\u0110ang \u0111\u1ebfn t\u1ecda \u0111\u1ed9 (" + farmX + "," + farmY + ")...";
+                moveToPosition(farmX, farmY);
+                return;
+            }
+
+            // Da den dung diem UP! Hoan tat GoBack
+            if (isGoBackActive) {
+                isGoBackActive = false;
+                goBackStepInfo = "";
+                player.posTransRoad = null;
+                GameCanvas.addInfoCharCline("[HONG PHUC HSO] GOBACK: \u0110\u00e3 v\u1ec1 \u0111\u1ebfn \u0111i\u1ec3m UP (" + farmMapName + ")!");
+                // Bat lai danh quai neu co
+                if (isAutoAttack) {
+                    Player.isAutoFire = 1;
+                    Player.isCurAutoFire = true;
+                    player.dofire_();
+                    Player.xBeginAutoFire = player.x;
+                    Player.yBeginAutofire = player.y;
+                    player.nextMonster();
+                    if (GameScreen.ObjFocus != null) {
+                        player.setAutoFire();
+                    }
+                }
+            }
+            return;
+        }
+
+        // Canh bao neu Map UP dang duoc dat la lang
+        if (isVillage(farmMapId)) {
+            goBackStepInfo = "Map UP \u0111ang l\u00e0 L\u00e0ng! H\u00e3y ch\u1ecdn Map UP kh\u00e1c.";
+            return;
+        }
+
+        // 3. Dang khong o Map UP -> Kich hoat GoBack!
+        isGoBackActive = true;
+
+        long now = mSystem.currentTimeMillis();
+        if (isWaitingMapChange) {
+            if (now - lastMapChangeTime < 3500L) {
+                goBackStepInfo = "\u0110ang chuy\u1ec3n map...";
+                return;
+            }
+            isWaitingMapChange = false;
+        }
+
+        // 4. Tinh toan duong di BFS tu currMap den farmMapId
+        int[] path = getMapPath(currMap, farmMapId);
+        if (path == null || path.length < 2) {
+            goBackStepInfo = "Kh\u00f4ng th\u1ea5y \u0111\u01b0\u1eddng: " + getMapName(currMap) + " -> " + farmMapName;
+            return;
+        }
+
+        int nextMapId = path[1];
+        String nextMapName = getMapName(nextMapId);
+        goBackStepInfo = "\u0110ang \u0111\u1ebfn: " + nextMapName + " (C\u00f2n " + (path.length - 1) + " map)";
+
+        // 5. Tim cong den nextMapId trong ban do hien tai
+        Point portal = findPortalToMap(nextMapId);
+        if (portal == null) {
+            portal = findPortalToMap(farmMapId);
+        }
+        if (portal == null) {
+            portal = selectBestPortal(currMap, nextMapId);
+        }
+
+        if (portal == null) {
+            goBackStepInfo = "Ch\u01b0a th\u1ea5y c\u1ed5ng sang " + nextMapName;
+            return;
+        }
+
+        // 6. Di chuyen den cong
+        int distPortal = MainObject.getDistance(player.x, player.y, portal.x, portal.y);
+        if (distPortal > 28) {
+            moveToPosition(portal.x, portal.y);
+        } else {
+            // Buoc len cong va gui lenh de chuyen map
+            player.posTransRoad = null;
+            player.x = portal.x;
+            player.y = portal.y;
+            player.toX = portal.x;
+            player.toY = portal.y;
+            player.resetAction();
+            GlobalService.gI().player_move((short)portal.x, (short)portal.y);
+            isWaitingMapChange = true;
+            lastMapChangeTime = now;
+            recordLearnedPortal(currMap, nextMapId, portal.x, portal.y);
+            try {
+                GlobalService.gI().Ok_Change_Map();
+            } catch (Exception ex) {
+            }
+        }
+    }
+
+    public static void cancelGoBack() {
+        isGoBackActive = false;
+        isGoBackPaused = true;
+        goBackStepInfo = "";
+        if (GameScreen.player != null) {
+            GameScreen.player.posTransRoad = null;
+        }
+        GameCanvas.addInfoCharCline("H\u1ee7y GoBack! (T\u1ea1m d\u1eebng)");
+    }
+
+    public static void toggleGoBack() {
+        loadConfig();
+        isGoBackEnabled = !isGoBackEnabled;
+        isGoBackPaused = false;
+        if (!isGoBackEnabled) {
+            cancelGoBack();
+        }
+        saveConfig();
+        GameCanvas.addInfoCharCline("GoBack: " + (isGoBackEnabled ? "B\u1eacT" : "T\u1eaeT"));
+    }
+
+    public static void saveCurrentFarmLocation() {
+        if (GameCanvas.currentScreen != GameCanvas.game || GameScreen.player == null || GameCanvas.loadmap == null) {
+            GameCanvas.addInfoCharCline("Vui l\u00f2ng v\u00e0o map tr\u01b0\u1edbc khi l\u01b0u v\u1ecb tr\u00ed UP!");
+            return;
+        }
+        int cur = GameCanvas.loadmap.idMap;
+        if (isVillage(cur)) {
+            GameCanvas.addInfoCharCline("\u0110ang \u1edf L\u00e0ng (" + getMapName(cur) + ")! H\u00e3y ra map qu\u00e1i ho\u1eb7c ch\u1ecdn t\u1eeb danh s\u00e1ch!");
+            return;
+        }
+        farmMapId = cur;
+        farmMapName = getMapName(farmMapId);
+        farmX = GameScreen.player.x;
+        farmY = GameScreen.player.y;
+        farmArea = LoadMap.Area;
+        isGoBackEnabled = true;
+        isGoBackPaused = false;
+        saveConfig();
+        GameCanvas.addInfoCharCline("\u0110\u00e3 l\u01b0u v\u1ecb tr\u00ed UP: " + farmMapName + " (Khu " + farmArea + ", " + farmX + "," + farmY + ")");
+    }
+
+    public static void setFarmMap(int mapId, int x, int y, byte area) {
+        farmMapId = mapId;
+        farmMapName = getMapName(mapId);
+        farmX = x;
+        farmY = y;
+        farmArea = area;
+        isGoBackEnabled = true;
+        isGoBackActive = true;
+        isGoBackPaused = false;
+        isWaitingMapChange = false;
+        saveConfig();
+        GameCanvas.addInfoCharCline("[HONG PHUC HSO] \u0110\u00e3 ch\u1ecdn Map UP: " + farmMapName + "! \u0110ang di chuy\u1ec3n...");
+    }
+
+    public static void startGoBackNow() {
+        if (farmMapId < 0) {
+            GameCanvas.addInfoCharCline("Ch\u01b0a c\u00f3 v\u1ecb tr\u00ed UP n\u00e0o \u0111\u01b0\u1ee3c l\u01b0u!");
+            return;
+        }
+        isGoBackEnabled = true;
+        isGoBackActive = true;
+        isGoBackPaused = false;
+        isWaitingMapChange = false;
+        saveConfig();
+        GameCanvas.addInfoCharCline("B\u1eaft \u0111\u1ea7u GoBack v\u1ec1: " + farmMapName + " (Khu " + farmArea + ")...");
+    }
+
+    public static void clearGoBackLocation() {
+        loadConfig();
+        farmMapId = -1;
+        farmMapName = "";
+        farmX = 0;
+        farmY = 0;
+        farmArea = 0;
+        isGoBackActive = false;
+        isGoBackPaused = false;
+        saveConfig();
+        GameCanvas.addInfoCharCline("\u0110\u00e3 x\u00f3a v\u1ecb tr\u00ed Map UP \u0111\u00e3 l\u01b0u!");
+    }
+
+    public static void showSelectFarmMapMenu() {
+        mVector mVector2 = new mVector("Menu Chon Map UP");
+
+        for (int i = 0; i < POPULAR_FARM_MAPS.length; ++i) {
+            final int mapId = POPULAR_FARM_MAPS[i][0];
+            final int defX = POPULAR_FARM_MAPS[i][1];
+            final int defY = POPULAR_FARM_MAPS[i][2];
+            String name = getMapName(mapId);
+            mVector2.addElement(new iCommand(name, new IAction() {
+                public void perform() {
+                    setFarmMap(mapId, defX, defY, (byte)0);
+                    showGoBackMenu();
+                }
+            }));
+        }
+
+        mVector2.addElement(new iCommand("Quay l\u1ea1i", new IAction() {
+            public void perform() {
+                showGoBackMenu();
+            }
+        }));
+
+        GameCanvas.menu2.startAt(mVector2, 2, "CH\u1eccN MAP UP T\u1eea DANH S\u00c1CH", false, null);
+    }
+
+    public static void showGoBackMenu() {
+        loadConfig();
+        mVector mVector2 = new mVector("Menu GoBack");
+
+        String strStatus = isGoBackEnabled ? "GoBack: B\u1eacT" : "GoBack: T\u1eaeT";
+        mVector2.addElement(new iCommand(strStatus, new IAction(){
+
+            public void perform() {
+                toggleGoBack();
+                showGoBackMenu();
+            }
+        }));
+
+        mVector2.addElement(new iCommand("Ch\u1ecdn Map UP t\u1eeb danh s\u00e1ch", new IAction(){
+
+            public void perform() {
+                showSelectFarmMapMenu();
+            }
+        }));
+
+        String locInfo = "L\u01b0u v\u1ecb tr\u00ed UP hi\u1ec7n t\u1ea1i";
+        if (farmMapId >= 0) {
+            locInfo = "L\u01b0u l\u1ea1i v\u1ecb tr\u00ed UP (" + farmMapName + " - Khu " + farmArea + ")";
+        }
+        mVector2.addElement(new iCommand(locInfo, new IAction(){
+
+            public void perform() {
+                saveCurrentFarmLocation();
+                showGoBackMenu();
+            }
+        }));
+
+        if (farmMapId >= 0) {
+            mVector2.addElement(new iCommand("V\u1ec1 Map UP ngay (" + farmMapName + ")", new IAction(){
+
+                public void perform() {
+                    startGoBackNow();
+                }
+            }));
+
+            mVector2.addElement(new iCommand("X\u00f3a v\u1ecb tr\u00ed \u0111\u00e3 l\u01b0u", new IAction(){
+
+                public void perform() {
+                    clearGoBackLocation();
+                    showGoBackMenu();
+                }
+            }));
+        }
+
+        mVector2.addElement(new iCommand("Quay l\u1ea1i", new IAction(){
+
+            public void perform() {
+                showMenu();
+            }
+        }));
+
+        GameCanvas.menu2.startAt(mVector2, 2, "C\u00c0I \u0110\u1eb6T GOBACK", false, null);
+    }
+
     public static boolean isAnyActive() {
         return AutoChat.isAutoChat
             || isAutoReconnect
             || autoReviveMode > 0
             || isAutoAttack
             || isAutoHpMp
-            || autoMountType > 0;
+            || autoMountType > 0
+            || (isGoBackEnabled && farmMapId >= 0);
     }
 
     public static void showMenu() {
@@ -1266,7 +2218,16 @@ public class MenuUP {
             }
         }));
 
-        // 2. Cai dat Auto Bom HP/MP
+        // 2. GoBack (Tu ve Map UP)
+        String strGb = isGoBackEnabled ? ("GoBack: B\u1eacT (" + (farmMapId >= 0 ? farmMapName : "Ch\u01b0a l\u01b0u") + ")") : "GoBack: T\u1eaeT";
+        mVector2.addElement(new iCommand(strGb, new IAction(){
+
+            public void perform() {
+                showGoBackMenu();
+            }
+        }));
+
+        // 3. Cai dat Auto Bom HP/MP
         String strHpMp = isAutoHpMp ? ("Auto B\u01a1m HP/MP: B\u1eacT (" + autoHpPercent + "%/" + autoMpPercent + "%)") : "Auto B\u01a1m HP/MP: T\u1eaeT";
         mVector2.addElement(new iCommand(strHpMp, new IAction(){
 
@@ -1275,7 +2236,7 @@ public class MenuUP {
             }
         }));
 
-        // 3. Auto Thu Cuoi
+        // 4. Auto Thu Cuoi
         String strMount = "Auto Th\u00fa C\u01b0\u1ee1i: " + getMountName(autoMountType);
         mVector2.addElement(new iCommand(strMount, new IAction(){
 
@@ -1284,7 +2245,7 @@ public class MenuUP {
             }
         }));
 
-        // 4. Auto Hoi Sinh
+        // 5. Auto Hoi Sinh
         String string2 = "Auto H\u1ed3i Sinh: T\u1eaeT";
         if (autoReviveMode == 1) {
             string2 = "Auto H\u1ed3i Sinh: V\u1ec1 L\u00e0ng";
@@ -1299,7 +2260,7 @@ public class MenuUP {
             }
         }));
 
-        // 5. Tu dong dang nhap lai (Auto Reconnect)
+        // 6. Tu dong dang nhap lai (Auto Reconnect)
         String string = isAutoReconnect ? "T\u1ef1 \u0111\u0103ng nh\u1eadp: B\u1eacT" : "T\u1ef1 \u0111\u0103ng nh\u1eadp: T\u1eaeT";
         mVector2.addElement(new iCommand(string, new IAction(){
 
@@ -1309,7 +2270,7 @@ public class MenuUP {
             }
         }));
 
-        // 6. Cai dat Auto Chat
+        // 7. Cai dat Auto Chat
         mVector2.addElement(new iCommand("C\u00e0i \u0111\u1eb7t Auto Chat", new IAction(){
 
             public void perform() {
@@ -1317,7 +2278,7 @@ public class MenuUP {
             }
         }));
 
-        // 7. Thong tin ban quyen
+        // 8. Thong tin ban quyen
         mVector2.addElement(new iCommand("Th\u00f4ng tin [HONG PHUC]", new IAction(){
 
             public void perform() {
@@ -1340,11 +2301,13 @@ public class MenuUP {
         String string4 = isAutoAttack ? "B\u1eacT (T\u1ef1 focus & \u0111\u00e1nh)" : "T\u1eaeT";
         String string5 = isAutoHpMp ? ("B\u1eacT (HP<" + autoHpPercent + "%, MP<" + autoMpPercent + "%)") : "T\u1eaeT";
         String string6 = getMountName(autoMountType);
+        String string7 = isGoBackEnabled ? ("B\u1eacT -> " + (farmMapId >= 0 ? (farmMapName + " (Khu " + farmArea + " [" + farmX + "," + farmY + "])") : "Ch\u01b0a l\u01b0u")) : "T\u1eaeT";
 
         String info = "=== MENU UP - HONG PHUC HSO ===\n" +
                       "B\u1ea3n quy\u1ec1n: HONG PHUC HSO\n" +
-                      "Phi\u00ean b\u1ea3n: UP Tool v1.5\n" +
+                      "Phi\u00ean b\u1ea3n: UP Tool v1.6\n" +
                       "Auto \u0110\u00e1nh qu\u00e1i: " + string4 + "\n" +
+                      "GoBack v\u1ec1 Map UP: " + string7 + "\n" +
                       "Auto B\u01a1m HP/MP: " + string5 + "\n" +
                       "Auto Th\u00fa c\u01b0\u1ee1i: " + string6 + "\n" +
                       "Auto H\u1ed3i sinh: " + string2 + "\n" +
