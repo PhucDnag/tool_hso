@@ -158,7 +158,7 @@ extends MainObject {
     }
 
     public void init() {
-        TabShopNew tabShopNew = new TabShopNew(Item.VecInvetoryPlayer, 0, T.tabhanhtrang, -1, TabShopNew.NORMAL);
+        TabShopNew tabShopNew = new TabShopNew(Item.VecInvetoryPlayer, (byte)0, T.tabhanhtrang, -1, TabShopNew.NORMAL);
         mVector mVector2 = new mVector("Player (init) v");
         mVector2.addElement(tabShopNew);
         TabMySeftNew tabMySeftNew = new TabMySeftNew(T.tabtrangbi);
@@ -171,12 +171,12 @@ extends MainObject {
         mVector2.addElement(tabQuest);
         mVector mVector3 = new mVector("Player mcmdTest");
         if (GameCanvas.isTouch) {
-            TabConfig tabConfig = new TabConfig(T.tabchucnang, mVector3, 11);
+            TabConfig tabConfig = new TabConfig(T.tabchucnang, mVector3, (byte)11);
             mVector2.addElement(tabConfig);
         } else {
-            TabConfig tabConfig = new TabConfig(T.tabhethong, mVector3, 7);
+            TabConfig tabConfig = new TabConfig(T.tabhethong, mVector3, (byte)7);
             mVector2.addElement(tabConfig);
-            TabConfig tabConfig2 = new TabConfig(T.tabchucnang, mVector3, 11);
+            TabConfig tabConfig2 = new TabConfig(T.tabchucnang, mVector3, (byte)11);
             mVector2.addElement(tabConfig2);
         }
         GameCanvas.AllInfo.addMoreTab(mVector2);
@@ -564,9 +564,11 @@ extends MainObject {
                 }
                 return true;
             }
-            case 5: 
-            case 7: {
+            case 5: {
                 return true;
+            }
+            case 7: {
+                return MedalFilter.shouldPickMedal(mainObject.colorName);
             }
         }
         return false;

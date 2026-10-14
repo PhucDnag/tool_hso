@@ -245,6 +245,10 @@ extends MainTabNew {
     }
 
     public void commandPointer(int n, int n2) {
+        if (n == 90) { GameObjects.AutoUpgradeMenu.show(this); return; }
+        if (GameObjects.AutoUpgrade.active && (n == 0 || n == 9 || n == 2)) {
+            GameObjects.AutoUpgradeMenu.show(this); return;
+        }
         switch (n) {
             case -1: {
                 this.backTab();
@@ -317,6 +321,7 @@ extends MainTabNew {
                 String string = "";
                 int n4 = 0;
                 mVector mVector2 = new mVector("TabRebuildItem menu");
+                if (this.isEquipmentRebuild()) mVector2.addElement(new iCommand("Tự cường hóa...", 90, this));
                 if (TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].priceCoin != 0) {
                     mVector2.addElement(new iCommand(T.coin, 2, 0, (AvMain)this));
                     string = T.dapbangxu + MainItem.getDotNumber(TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].priceCoin) + " " + T.coin + "?";
@@ -977,6 +982,10 @@ extends MainTabNew {
                     }
                     if (isBeginEff == 0) {
                         mFont.tahoma_7_white.drawString(mGraphics2, "Lv " + TabRebuildItem.itemRe.tier, this.posMaterial[i][0], this.posMaterial[i][1] - 22, 2, false);
+                    }
+                    if (GameObjects.AutoUpgrade.active) {
+                        mFont.tahoma_7_yellow.drawString(mGraphics2, "Auto: +" + TabRebuildItem.itemRe.tier + " -> +" + GameObjects.AutoUpgrade.runTarget + " (" + GameObjects.AutoUpgrade.attempts + ")", this.xBegin + MainTabNew.wblack / 2, this.yBegin + 8, 2, false);
+                        mFont.tahoma_7_white.drawString(mGraphics2, GameObjects.AutoUpgrade.progressLabel(), this.xBegin + MainTabNew.wblack / 2, this.yBegin + 19, 2, false);
                     }
                 }
             }
@@ -1675,8 +1684,18 @@ extends MainTabNew {
         }
     }
 
+    public boolean isEquipmentRebuild() {
+        return this.typeRebuild == TYPE_REBUILD && !this.isTabHopNguyenLieu;
+    }
+
     public void updateRebuild() {
-        if (isDapnhanh && isBeginEff == 2) {
+        if (GameObjects.AutoUpgrade.active) return;
+        if (itemRe == null && isBeginEff != 0) {
+            isBeginEff = 0;
+            if (GameObjects.AutoUpgrade.active) GameObjects.AutoUpgrade.stop("Không còn vật phẩm trong ô cường hóa.");
+            return;
+        }
+        if ((isDapnhanh || GameObjects.AutoUpgrade.active) && isBeginEff == 2) {
             isBeginEff = isNextRebuild;
             this.time = 0L;
         }
@@ -1736,14 +1755,19 @@ extends MainTabNew {
             isBeginEff = (byte)5;
             this.time = 0L;
         } else if (isBeginEff == 5) {
-            ++this.time;
+            if (GameObjects.AutoUpgrade.active) {
+                this.time = 100L;
+                vecEffRe.removeAllElements();
+            } else {
+                ++this.time;
+            }
             MainItem mainItem = (MainItem)Item.getItemInventory(TabRebuildItem.itemRe.ItemCatagory, (short)TabRebuildItem.itemRe.Id);
             if (!this.isTabHopNguyenLieu) {
                 itemRe = mainItem != null ? MainItem.MainItem_Item(mainItem.Id, mainItem.itemNameExcludeLv, mainItem.imageId, mainItem.tier, mainItem.colorNameItem, mainItem.classcharItem, mainItem.ItemCatagory, mainItem.mInfo, mainItem.type_Only_Item, false, mainItem.IdTem, mainItem.priceItem, (short)mainItem.LvItem, mainItem.canSell, mainItem.canTrade, mainItem.timeUse, (byte)0, (byte)0) : null;
             }
             tilemayman = tilemaymanafter;
             if (vecEffRe.size() == 0 || this.time >= 100L) {
-                if (!isDapnhanh) {
+                if (!isDapnhanh && !GameObjects.AutoUpgrade.active) {
                     GameCanvas.menu2.startAt_NPC(null, contentShow, Menu2.IdNPCLast, (byte)2, false, 0);
                 } else if (isNextRebuild == 3) {
                     GameCanvas.addInfoChar(T.thanhcong);
@@ -1754,7 +1778,9 @@ extends MainTabNew {
                 isBeginEff = (byte)6;
             }
         } else if (isBeginEff == 6) {
-            isDapnhanh = false;
+            if (!GameObjects.AutoUpgrade.active) {
+                isDapnhanh = false;
+            }
             if (TabRebuildItem.itemRe.tier == 15) {
                 itemRe = null;
             }
@@ -1762,14 +1788,22 @@ extends MainTabNew {
                 itemRe = null;
             }
             isBeginEff = 0;
-            if (isLucky) {
+            if (GameObjects.AutoUpgrade.active) {
+                isLucky = false; itemDaMayMan = null;
+            } else if (isLucky) {
                 this.checkAddIsLucky();
             }
-            if (!GameCanvas.isTouch) {
-                this.left = this.cmdView;
-                this.center = this.cmdHoiDap;
-                MainTabNew.Focus = 0;
-            } else {
+            this.restoreCommands();
+        }
+    }
+
+    public void restoreCommands() {
+        if (!GameCanvas.isTouch) {
+            this.left = this.cmdView;
+            this.center = this.cmdHoiDap;
+            MainTabNew.Focus = 0;
+        } else {
+            if (this.vecListCmd != null) {
                 this.vecListCmd.removeAllElements();
                 if (itemRe != null) {
                     if (MainTabNew.longwidth > 0) {
@@ -1807,7 +1841,7 @@ extends MainTabNew {
     }
 
     public void addEffectRebuild(int n, int n2, int n3, int n4) {
-        EffectSkill effectSkill = new EffectSkill(n, n2, n3, n4, 0, 0);
+        EffectSkill effectSkill = new EffectSkill(n, n2, n3, n4, (short)0, (byte)0);
         vecEffRe.addElement(effectSkill);
     }
 

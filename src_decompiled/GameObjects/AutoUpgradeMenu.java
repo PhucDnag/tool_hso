@@ -1,0 +1,395 @@
+package GameObjects;
+
+import CLib.mVector;
+import InterfaceComponents.DataRebuildItem;
+import InterfaceComponents.InputDialog;
+import InterfaceComponents.TabRebuildItem;
+import InterfaceComponents.iCommand;
+import InterfaceComponents.IAction;
+import Main.GameCanvas;
+import GameScreen.GameScreen;
+
+public final class AutoUpgradeMenu {
+    private static TabRebuildItem tab;
+    public static boolean isShowing = false;
+
+    public static void show(TabRebuildItem selected) {
+        AutoUpgrade.loadConfig();
+        isShowing = true;
+        if (selected != null) tab = selected;
+        if (tab == null && GameCanvas.currentScreen == GameCanvas.shopNpc) {
+            for (int i = 0; i < GameCanvas.shopNpc.VecTabScreen.size(); i++) {
+                Object t = GameCanvas.shopNpc.VecTabScreen.elementAt(i);
+                if (t instanceof TabRebuildItem && ((TabRebuildItem)t).isEquipmentRebuild()) {
+                    tab = (TabRebuildItem)t;
+                }
+            }
+        }
+
+        mVector menu = new mVector("Auto cuong hoa");
+
+        if (AutoUpgrade.active) {
+            menu.addElement(new iCommand("DỪNG CƯỜNG HÓA", new IAction() {
+                public void perform() {
+                    AutoUpgrade.stop("Đã dừng theo yêu cầu.");
+                    show(tab);
+                }
+            }));
+            menu.addElement(new iCommand("Trạng thái: " + AutoUpgrade.status, new IAction() {
+                public void perform() {
+                    show(tab);
+                }
+            }));
+            menu.addElement(new iCommand("Mục tiêu: +" + AutoUpgrade.targetLevel + " | " + AutoUpgrade.formatDelay(AutoUpgrade.delayMs), new IAction() {
+                public void perform() {
+                    show(tab);
+                }
+            }));
+            menu.addElement(new iCommand("Dùng tiền: " + (AutoUpgrade.currency == 0 ? "Xu" : "Ngọc"), new IAction() {
+                public void perform() {
+                    show(tab);
+                }
+            }));
+            menu.addElement(new iCommand("Đóng (Auto chạy tiếp)", new IAction() {
+                public void perform() {
+                    isShowing = false;
+                    GameCanvas.menu2.isShowMenu = false;
+                }
+            }));
+        } else {
+            String itemStr;
+            int curTier = 0;
+            if (TabRebuildItem.itemRe == null) {
+                itemStr = "(Chưa bỏ đồ vào ô)";
+            } else {
+                itemStr = TabRebuildItem.itemRe.itemName + " +" + TabRebuildItem.itemRe.tier;
+                curTier = TabRebuildItem.itemRe.tier;
+            }
+
+            final int finalCurTier = curTier;
+
+            // 1. Nút Bắt đầu
+            menu.addElement(new iCommand("BẮT ĐẦU: " + itemStr + " -> +" + AutoUpgrade.targetLevel, new IAction() {
+                public void perform() {
+                    if (TabRebuildItem.itemRe == null) {
+                        GameCanvas.addInfoCharCline("Vui lòng bỏ trang bị vào ô cường hóa trước!");
+                        show(tab);
+                        return;
+                    }
+                    if (finalCurTier >= AutoUpgrade.targetLevel) {
+                        GameCanvas.addInfoCharCline("Trang bị đã đạt cấp +" + finalCurTier + " (mục tiêu: +" + AutoUpgrade.targetLevel + ")!");
+                        show(tab);
+                        return;
+                    }
+                    isShowing = false;
+                    GameCanvas.menu2.isShowMenu = false;
+                    AutoUpgrade.start(tab);
+                }
+            }));
+
+            // 2. Cấp mục tiêu
+            menu.addElement(new iCommand("Cấp mục tiêu: +" + AutoUpgrade.targetLevel, new IAction() {
+                public void perform() {
+                    showTargetLevels();
+                }
+            }));
+
+            // 3. Delay cường hóa
+            menu.addElement(new iCommand("Delay cường hóa: " + AutoUpgrade.formatDelay(AutoUpgrade.delayMs), new IAction() {
+                public void perform() {
+                    showDelayMenu();
+                }
+            }));
+
+            // 4. Loại tiền
+            menu.addElement(new iCommand("Dùng tiền: " + (AutoUpgrade.currency == 0 ? "Xu" : "Ngọc") + " (Bấm để đổi)", new IAction() {
+                public void perform() {
+                    AutoUpgrade.currency = 1 - AutoUpgrade.currency;
+                    AutoUpgrade.saveConfig();
+                    show(tab);
+                }
+            }));
+
+            // 5. Cài đặt Cỏ may mắn
+            menu.addElement(new iCommand("Cài đặt Cỏ may mắn...", new IAction() {
+                public void perform() {
+                    showCloverMenu();
+                }
+            }));
+
+            // 6. Xem thông tin nguyên liệu
+            menu.addElement(new iCommand("Xem nguyên liệu cấp +" + (curTier + 1) + "...", new IAction() {
+                public void perform() {
+                    showMaterialInfo(finalCurTier);
+                }
+            }));
+
+            // 7. Đóng
+            menu.addElement(new iCommand("Đóng", new IAction() {
+                public void perform() {
+                    isShowing = false;
+                    GameCanvas.menu2.isShowMenu = false;
+                }
+            }));
+        }
+
+        GameCanvas.menu2.startAt(menu, 2, "TỰ ĐỘNG CƯỜNG HÓA", false, null);
+    }
+
+    private static void showDelayMenu() {
+        mVector menu = new mVector("Delay");
+        int[] presets = new int[]{200, 500, 1000, 1500, 2000, 3000};
+        String[] labels = new String[]{
+            "⚡ 0.2 giây (Siêu tốc)",
+            "0.5 giây (Nhanh)",
+            "1.0 giây (Mặc định)",
+            "1.5 giây (Vừa phải)",
+            "2.0 giây (An toàn)",
+            "3.0 giây (Chậm)"
+        };
+        for (int i = 0; i < presets.length; i++) {
+            final int ms = presets[i];
+            String check = (AutoUpgrade.delayMs == ms) ? "[] " : "";
+            menu.addElement(new iCommand(check + labels[i], new IAction() {
+                public void perform() {
+                    AutoUpgrade.delayMs = ms;
+                    AutoUpgrade.saveConfig();
+                    show(tab);
+                }
+            }));
+        }
+        menu.addElement(new iCommand("⌨ Tự nhập số giây...", new IAction() {
+            public void perform() {
+                promptCustomDelay();
+            }
+        }));
+        menu.addElement(new iCommand("Quay lại", new IAction() {
+            public void perform() {
+                show(tab);
+            }
+        }));
+        GameCanvas.menu2.startAt(menu, 2, "CÀI ĐẶT DELAY CƯỜNG HÓA", false, null);
+    }
+
+    private static void promptCustomDelay() {
+        final InputDialog dlg = new InputDialog();
+        dlg.setinfo("Nhập số giây delay (ví dụ: 0.5 hoặc 2):", new iCommand("Xong", new IAction() {
+            public void perform() {
+                try {
+                    String txt = dlg.tfInput != null ? dlg.tfInput.getText() : "";
+                    int ms = AutoUpgrade.parseDelaySeconds(txt);
+                    if (ms <= 0) {
+                        GameCanvas.addInfoCharCline("Số giây không hợp lệ!");
+                    } else {
+                        AutoUpgrade.delayMs = ms;
+                        AutoUpgrade.saveConfig();
+                    }
+                } catch (Exception e) {
+                    GameCanvas.addInfoCharCline("Lỗi nhập liệu!");
+                }
+                GameCanvas.currentDialog = null;
+                show(tab);
+            }
+        }), false, "DELAY CƯỜNG HÓA");
+        GameCanvas.currentDialog = dlg;
+    }
+
+    private static void showTargetLevels() {
+        mVector menu = new mVector("Cap muc tieu");
+        for (int i = 1; i <= AutoUpgrade.MAX_LEVEL; i++) {
+            final int level = i;
+            String check = (AutoUpgrade.targetLevel == level) ? "[] " : "";
+            menu.addElement(new iCommand(check + "Dừng khi đạt +" + i, new IAction() {
+                public void perform() {
+                    AutoUpgrade.targetLevel = level;
+                    AutoUpgrade.saveConfig();
+                    show(tab);
+                }
+            }));
+        }
+        menu.addElement(new iCommand("Quay lại", new IAction() {
+            public void perform() {
+                show(tab);
+            }
+        }));
+        GameCanvas.menu2.startAt(menu, 2, "CHỌN CẤP MỤC TIÊU", false, null);
+    }
+
+    private static void showCloverMenu() {
+        mVector menu = new mVector("Cai co");
+        menu.addElement(new iCommand("✨ Cài chuẩn (+4..7: 3 lá | +8..10: 4 lá | +11+: 3 màu)", new IAction() {
+            public void perform() {
+                for (int i = 1; i <= AutoUpgrade.MAX_LEVEL; i++) {
+                    if (i <= 3) AutoUpgrade.policy[i] = (byte)AutoUpgrade.NONE;
+                    else if (i <= 7) AutoUpgrade.policy[i] = (byte)AutoUpgrade.THREE;
+                    else if (i <= 10) AutoUpgrade.policy[i] = (byte)AutoUpgrade.FOUR;
+                    else AutoUpgrade.policy[i] = (byte)AutoUpgrade.COLOR;
+                }
+                AutoUpgrade.saveConfig();
+                GameCanvas.addInfoCharCline("Đã áp dụng cài cỏ chuẩn!");
+                showCloverMenu();
+            }
+        }));
+        menu.addElement(new iCommand("❌ Không dùng cỏ cho tất cả cấp", new IAction() {
+            public void perform() {
+                for (int i = 1; i <= AutoUpgrade.MAX_LEVEL; i++) AutoUpgrade.policy[i] = (byte)AutoUpgrade.NONE;
+                AutoUpgrade.saveConfig();
+                GameCanvas.addInfoCharCline("Đã tắt dùng cỏ cho mọi cấp!");
+                showCloverMenu();
+            }
+        }));
+        menu.addElement(new iCommand("Dùng Cỏ 3 lá từ cấp...", new IAction() {
+            public void perform() {
+                showCloverBatch(AutoUpgrade.THREE);
+            }
+        }));
+        menu.addElement(new iCommand("Dùng Cỏ 4 lá từ cấp...", new IAction() {
+            public void perform() {
+                showCloverBatch(AutoUpgrade.FOUR);
+            }
+        }));
+        menu.addElement(new iCommand("Dùng Cỏ 3 màu từ cấp...", new IAction() {
+            public void perform() {
+                showCloverBatch(AutoUpgrade.COLOR);
+            }
+        }));
+        menu.addElement(new iCommand("Cài chi tiết từng cấp (+1 -> +15)...", new IAction() {
+            public void perform() {
+                showDetailedCloverList();
+            }
+        }));
+        menu.addElement(new iCommand("Quay lại", new IAction() {
+            public void perform() {
+                show(tab);
+            }
+        }));
+        GameCanvas.menu2.startAt(menu, 2, "CÀI ĐẶT CỎ MAY MẮN", false, null);
+    }
+
+    private static void showCloverBatch(final int type) {
+        mVector menu = new mVector("Batch clover");
+        int[] startLevels = new int[]{4, 5, 6, 7, 8, 9, 10, 11};
+        for (int i = 0; i < startLevels.length; i++) {
+            final int lvl = startLevels[i];
+            menu.addElement(new iCommand("Từ cấp +" + lvl + " trở lên", new IAction() {
+                public void perform() {
+                    for (int j = lvl; j <= AutoUpgrade.MAX_LEVEL; j++) {
+                        AutoUpgrade.policy[j] = (byte)type;
+                    }
+                    AutoUpgrade.saveConfig();
+                    showCloverMenu();
+                }
+            }));
+        }
+        menu.addElement(new iCommand("Quay lại", new IAction() {
+            public void perform() {
+                showCloverMenu();
+            }
+        }));
+        GameCanvas.menu2.startAt(menu, 2, "DÙNG " + AutoUpgrade.cloverName(type).toUpperCase() + " TỪ CẤP", false, null);
+    }
+
+    private static void showDetailedCloverList() {
+        mVector menu = new mVector("Co tung cap");
+        for (int i = 1; i <= AutoUpgrade.MAX_LEVEL; i++) {
+            final int level = i;
+            menu.addElement(new iCommand("+" + (i - 1) + " → +" + i + ": " + AutoUpgrade.cloverName(AutoUpgrade.policy[i]), new IAction() {
+                public void perform() {
+                    showCloverChoices(level);
+                }
+            }));
+        }
+        menu.addElement(new iCommand("Quay lại", new IAction() {
+            public void perform() {
+                showCloverMenu();
+            }
+        }));
+        GameCanvas.menu2.startAt(menu, 2, "CỎ CHO TỪNG CẤP ĐÍCH", false, null);
+    }
+
+    private static void showCloverChoices(final int level) {
+        mVector menu = new mVector("Chon co");
+        for (int i = 0; i <= 3; i++) {
+            final int type = i;
+            String check = (AutoUpgrade.policy[level] == i) ? "[] " : "";
+            menu.addElement(new iCommand(check + AutoUpgrade.cloverName(i), new IAction() {
+                public void perform() {
+                    AutoUpgrade.policy[level] = (byte)type;
+                    AutoUpgrade.saveConfig();
+                    showDetailedCloverList();
+                }
+            }));
+        }
+        menu.addElement(new iCommand("Quay lại", new IAction() {
+            public void perform() {
+                showDetailedCloverList();
+            }
+        }));
+        GameCanvas.menu2.startAt(menu, 2, "CƯỜNG HÓA LÊN +" + level, false, null);
+    }
+
+    private static void showMaterialInfo(int curTier) {
+        mVector menu = new mVector("Nguyen lieu");
+        if (TabRebuildItem.itemRe == null) {
+            menu.addElement(new iCommand("Chưa có vật phẩm trong ô cường hóa!", new IAction() {
+                public void perform() {
+                    show(tab);
+                }
+            }));
+        } else if (curTier >= AutoUpgrade.MAX_LEVEL) {
+            menu.addElement(new iCommand("Trang bị đã đạt cấp tối đa (+15)!", new IAction() {
+                public void perform() {
+                    show(tab);
+                }
+            }));
+        } else if (TabRebuildItem.dataRebuild != null && curTier < TabRebuildItem.dataRebuild.length) {
+            DataRebuildItem data = TabRebuildItem.dataRebuild[curTier];
+            final int nextLvl = curTier + 1;
+            menu.addElement(new iCommand("Trang bị: " + TabRebuildItem.itemRe.itemName + " +" + curTier + " -> +" + nextLvl, new IAction() {
+                public void perform() {
+                    show(tab);
+                }
+            }));
+            long myCoin = GameScreen.player != null ? GameScreen.player.coin : 0;
+            long myGold = GameScreen.player != null ? GameScreen.player.gold : 0;
+            menu.addElement(new iCommand("Chi phí Xu: " + data.priceCoin + " (Có: " + myCoin + (myCoin >= data.priceCoin ? " - ĐỦ)" : " - THIẾU)"), new IAction() {
+                public void perform() {
+                    show(tab);
+                }
+            }));
+            menu.addElement(new iCommand("Chi phí Ngọc: " + data.priceGold + " (Có: " + myGold + (myGold >= data.priceGold ? " - ĐỦ)" : " - THIẾU)"), new IAction() {
+                public void perform() {
+                    show(tab);
+                }
+            }));
+            if (data.mValue != null && TabRebuildItem.idMaterial != null) {
+                for (int i = 0; i < data.mValue.length && i < TabRebuildItem.idMaterial.length; i++) {
+                    int need = data.mValue[i];
+                    if (need <= 0) continue;
+                    Item mat = Item.getItemInventory(7, TabRebuildItem.idMaterial[i]);
+                    int have = mat != null ? mat.numPotion : 0;
+                    MainItem matInfo = Item.getMaterial(TabRebuildItem.idMaterial[i]);
+                    String matName = matInfo != null ? matInfo.itemName : ("Đá loại " + (i + 1));
+                    String st = (have >= need) ? " [ĐỦ]" : " [THIẾU]";
+                    menu.addElement(new iCommand(matName + ": " + have + "/" + need + st, new IAction() {
+                        public void perform() {
+                            show(tab);
+                        }
+                    }));
+                }
+            }
+            int clv = AutoUpgrade.policy[nextLvl];
+            menu.addElement(new iCommand("Cỏ thiết lập: " + AutoUpgrade.cloverName(clv), new IAction() {
+                public void perform() {
+                    showCloverChoices(nextLvl);
+                }
+            }));
+        }
+        menu.addElement(new iCommand("Quay lại", new IAction() {
+            public void perform() {
+                show(tab);
+            }
+        }));
+        GameCanvas.menu2.startAt(menu, 2, "NGUYÊN LIỆU CHO CẤP TIẾP THEO", false, null);
+    }
+}

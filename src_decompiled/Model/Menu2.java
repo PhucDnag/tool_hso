@@ -449,6 +449,14 @@ extends AvMain {
     }
 
     public void setinfoDynamic(mVector mVector2, int n, int n2, int n3, String string) {
+        if (GameObjects.AutoFarmSupport.dynamic(n3, n2, string, mVector2)) {
+            this.isShowMenu = false;
+            return;
+        }
+        if (GameObjects.GoBackNavigator.onMenu(n3, n2, mVector2)) {
+            this.isShowMenu = false;
+            return;
+        }
         isLoadData = false;
         this.isSv = false;
         this.waitToPerform = 0;
@@ -829,7 +837,7 @@ extends AvMain {
                 GameScreen.player.resetAction();
                 Session_ME.gI().close();
                 GameCanvas.login.Show();
-                GameScreen.player = new Player(0, 0, "unname", 0, 0);
+                GameScreen.player = new Player(0, (byte)0, "unname", 0, 0);
                 break;
             }
             case 20: {

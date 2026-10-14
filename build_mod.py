@@ -18,13 +18,30 @@ def build():
     os.makedirs(BUILD_DIR, exist_ok=True)
 
     sources = [
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "AutoFarmSupport.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "CLib", "mFont.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "DisplayPrivacy.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "AutoChat.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "AutoSellManager.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "AutoUpgrade.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "AutoUpgradeMenu.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "MedalFilter.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "Player.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "MenuUP.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "GoBackPathfinder.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "GoBackPosition.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "GoBackRoutes.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "GoBackAtlas.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "GoBackNavigator.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "GoBackProfile.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "Model", "Menu2.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "GameScreen", "GameScreen.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "GameScreen", "PaintInfoGameScreen.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "InterfaceComponents", "TabConfig.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "InterfaceComponents", "TabRebuildItem.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "Main", "GameCanvas.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "netcommand", "global", "GlobalLogicHandler.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "netcommand", "global", "GlobalMessageHandler.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "GameScreen", "LoginScreen.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "GameScreen", "SelectCharScreen.java"),
     ]
@@ -33,7 +50,7 @@ def build():
 
     print("[2/4] Compiling Java classes with ECJ...")
     cmd = [
-        "java", "-jar", ECJ_JAR,
+        os.environ.get("JAVA", "java"), "-jar", ECJ_JAR,
         "-1.4",
         "-encoding", "UTF-8",
         "-cp", classpath,
@@ -74,10 +91,14 @@ def build():
         for name, full in new_files.items():
             zout.write(full, name)
 
-    shutil.copy2(MOD_JAR, TARGET_JAR)
+    try:
+        shutil.copyfile(MOD_JAR, TARGET_JAR)
+        print(f"Updated active jar: {TARGET_JAR}")
+    except Exception as e:
+        print(f"Notice: Could not overwrite {TARGET_JAR} ({e}). Game emulator might be running. Mod jar saved as {MOD_JAR}.")
     shutil.rmtree(BUILD_DIR)
     print(f"Build SUCCESSFUL! Output jar: {MOD_JAR}")
     return True
 
 if __name__ == "__main__":
-    build()
+    raise SystemExit(0 if build() else 1)

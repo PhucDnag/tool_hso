@@ -35,6 +35,7 @@ public class GlobalLogicHandler {
     }
 
     public static void onDisconnect() {
+        if (GameObjects.AutoUpgrade.active) GameObjects.AutoUpgrade.stop("Mất kết nối; đã dừng cường hóa.");
         mSystem.outloi("mat ket noi");
         Session_ME.gI().close();
         if (GameScreen.player != null) {

@@ -167,7 +167,10 @@ implements IMessageHandler {
                 break;
             }
             case 16: {
-                GameCanvas.readMessenge.charInventory(message);
+                synchronized (GameObjects.AutoUpgrade.class) {
+                    GameCanvas.readMessenge.charInventory(message);
+                    GameObjects.AutoUpgrade.onInventory();
+                }
                 break;
             }
             case 19: {
@@ -343,7 +346,11 @@ implements IMessageHandler {
                 break;
             }
             case 67: {
-                GameCanvas.readMessenge.Rebuild_Item(message);
+                synchronized (GameObjects.AutoUpgrade.class) {
+                    int[] reply = GameObjects.AutoUpgrade.peekReply(message);
+                    GameCanvas.readMessenge.Rebuild_Item(message);
+                    GameObjects.AutoUpgrade.onReply(reply);
+                }
                 break;
             }
             case 73: {

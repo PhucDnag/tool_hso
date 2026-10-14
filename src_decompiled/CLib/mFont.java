@@ -133,6 +133,7 @@ public class mFont {
     }
 
     public int getWidth(String string) {
+        string = GameObjects.DisplayPrivacy.text(string);
         int n = 0;
         for (int i = 0; i < string.length(); ++i) {
             int n2 = this.strFont.indexOf(string.charAt(i));
@@ -145,6 +146,7 @@ public class mFont {
     }
 
     public void drawString(mGraphics mGraphics2, String string, int n, int n2, int n3, boolean bl) {
+        string = GameObjects.DisplayPrivacy.text(string);
         int n4 = string.length();
         int n5 = n3 == 0 ? n : (n3 == 1 ? n - this.getWidth(string) : n - (this.getWidth(string) >> 1));
         for (int i = 0; i < n4; ++i) {
@@ -160,6 +162,7 @@ public class mFont {
     }
 
     public void drawString(mGraphics mGraphics2, String string, int n, int n2, int n3, mFont mFont2, boolean bl) {
+        string = GameObjects.DisplayPrivacy.text(string);
         int n4 = string.length();
         int n5 = n3 == 0 ? n : (n3 == 1 ? n - this.getWidth(string) : n - (this.getWidth(string) >> 1));
         for (int i = 0; i < n4; ++i) {
@@ -177,6 +180,7 @@ public class mFont {
     }
 
     public void drawString(mGraphics mGraphics2, String string, int n, int n2, int n3, mFont mFont2, mFont mFont3, boolean bl) {
+        string = GameObjects.DisplayPrivacy.text(string);
         int n4 = string.length();
         int n5 = n3 == 0 ? n : (n3 == 1 ? n - this.getWidth(string) : n - (this.getWidth(string) >> 1));
         for (int i = 0; i < n4; ++i) {

@@ -27,6 +27,7 @@ import GameObjects.MainBuff;
 import GameObjects.MainClan;
 import GameObjects.MainInfoItem;
 import GameObjects.MainItem;
+import GameObjects.AutoSellManager;
 import GameObjects.MainMonster;
 import GameObjects.MainObject;
 import GameObjects.MainParty;
@@ -4518,6 +4519,9 @@ extends AvMain {
             this.idDialog = message.reader().readShort();
             this.typeDialog = message.reader().readByte();
             String string = message.reader().readUTF();
+            if (AutoSellManager.handleDialogServer(this.idDialog, this.typeDialog, string)) {
+                return;
+            }
             mVector mVector2 = new mVector("ReadMessenge vec4");
             mVector2.addElement(new iCommand("Ok", 2, 1, (AvMain)this));
             mVector2.addElement(new iCommand(T.cancel, 2, 0, (AvMain)this));
@@ -4844,6 +4848,7 @@ extends AvMain {
                     TabRebuildItem.isLucky = true;
                 }
                 TabRebuildItem.tilemaymanafter = TabRebuildItem.isBeginEff == 0 ? (TabRebuildItem.tilemayman = message.reader().readUTF()) : message.reader().readUTF();
+                GameObjects.AutoUpgrade.onRebuildAck((byte)0, s, by2);
             } else if (by == 1) {
                 byte by3 = message.reader().readByte();
                 if (by3 == 3) {
@@ -4852,16 +4857,19 @@ extends AvMain {
                     TabRebuildItem.isLucky = false;
                 }
                 TabRebuildItem.tilemaymanafter = TabRebuildItem.isBeginEff == 0 ? (TabRebuildItem.tilemayman = message.reader().readUTF()) : message.reader().readUTF();
+                GameObjects.AutoUpgrade.onRebuildAck((byte)1, (short)-1, by3);
             } else if (by == 2) {
                 GameCanvas.end_Dialog();
                 TabRebuildItem.isBeginEff = 1;
                 TabRebuildItem.isNextRebuild = message.reader().readByte();
                 TabRebuildItem.contentShow = message.reader().readUTF();
                 mSystem.outloi("thanh cong hay that bai=" + TabRebuildItem.isNextRebuild);
+                GameObjects.AutoUpgrade.onRebuildResult(TabRebuildItem.isNextRebuild, TabRebuildItem.contentShow);
             } else if (by == 3) {
                 GameCanvas.end_Dialog();
                 String string = message.reader().readUTF();
                 GameCanvas.menu2.startAt_NPC(null, string, Menu2.IdNPCLast, (byte)2, false, 0);
+                GameObjects.AutoUpgrade.onRebuildReject(string);
             } else if (by == 4) {
                 short s = message.reader().readShort();
                 short s2 = message.reader().readShort();
@@ -4894,8 +4902,10 @@ extends AvMain {
                 TabRebuildItem.isBeginEff = 1;
                 TabRebuildItem.isNextRebuild = message.reader().readByte();
                 TabRebuildItem.contentShow = message.reader().readUTF();
+                GameObjects.AutoUpgrade.onRebuildResult(TabRebuildItem.isNextRebuild, TabRebuildItem.contentShow);
             } else if (by == 6) {
                 TabRebuildItem.itemRe = null;
+                GameObjects.AutoUpgrade.onRebuildClear();
             }
         }
         catch (Exception exception) {
