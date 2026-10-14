@@ -502,6 +502,7 @@ extends AvMain {
     }
 
     public void paintBuffLast(mGraphics mGraphics2) {
+        if (RenderSettings.hideSkills) return;
         if (this.vecBuff == null) {
             return;
         }
@@ -517,6 +518,7 @@ extends AvMain {
     }
 
     public void paintBuffFirst(mGraphics mGraphics2) {
+        if (RenderSettings.hideSkills) return;
         if (this.vecBuff == null) {
             return;
         }
@@ -1295,6 +1297,7 @@ extends AvMain {
     }
 
     public void paintEffauto(mGraphics mGraphics2, int n, int n2) {
+        if (RenderSettings.hideSkills) return;
         if (!this.isMainChar() && hideEff == 1) {
             return;
         }
@@ -1306,6 +1309,7 @@ extends AvMain {
     }
 
     public void paintDataEff_Top(mGraphics mGraphics2, int n, int n2) {
+        if (RenderSettings.hideSkills) return;
         if (!this.isMainChar() && hideEff == 1) {
             return;
         }
@@ -1320,6 +1324,7 @@ extends AvMain {
     }
 
     public void paintDataEff_Bot(mGraphics mGraphics2, int n, int n2) {
+        if (RenderSettings.hideSkills) return;
         if (!this.isMainChar() && hideEff == 1) {
             return;
         }
@@ -1334,6 +1339,7 @@ extends AvMain {
     }
 
     public void paintEffauto_Low(mGraphics mGraphics2, int n, int n2) {
+        if (RenderSettings.hideSkills) return;
         if (!this.isMainChar() && hideEff == 1) {
             return;
         }
@@ -2561,6 +2567,7 @@ extends AvMain {
     }
 
     private void paintEffectVukhi(mGraphics mGraphics2, int n, WPSplashInfo wPSplashInfo, int n2) {
+        if (RenderSettings.hideSkills) return;
     }
 
     public void resetXY() {
@@ -2965,7 +2972,7 @@ extends AvMain {
         this.slotGem = new byte[this.arrayGemKham[8 + n].length];
         for (int i = 0; i < this.arrayGemKham.length; ++i) {
             for (int j = 0; j < this.arrayGemKham[i].length; ++j) {
-                this.slotGem[j] = this.arrayGemKham[8 + n][j] >= 23 && this.arrayGemKham[8 + n][j] <= 27 ? 0 : (this.arrayGemKham[8 + n][j] >= 28 && this.arrayGemKham[8 + n][j] <= 32 ? 1 : -1);
+                this.slotGem[j] = (byte)(this.arrayGemKham[8 + n][j] >= 23 && this.arrayGemKham[8 + n][j] <= 27 ? 0 : (this.arrayGemKham[8 + n][j] >= 28 && this.arrayGemKham[8 + n][j] <= 32 ? 1 : -1));
             }
         }
     }
@@ -3069,6 +3076,7 @@ extends AvMain {
     }
 
     public void paintEffectCharWearing(mGraphics mGraphics2) {
+        if (RenderSettings.hideSkills) return;
         if (this.vecEffectCharWearing.size() > 0) {
             for (int i = 0; i < this.vecEffectCharWearing.size(); ++i) {
                 EffectCharWearing effectCharWearing = (EffectCharWearing)this.vecEffectCharWearing.elementAt(i);

@@ -280,10 +280,11 @@ public class MenuUP {
 
     public static void saveCurrentChar() {
         if (GameScreen.player != null && GameScreen.player.name != null && GameScreen.player.name.length() > 0) {
+            boolean changed = !GameScreen.player.name.equals(lastCharName) || lastCharId != GameScreen.player.ID;
             lastCharName = GameScreen.player.name;
             lastCharId = GameScreen.player.ID;
             lastArea = (byte)LoadMap.Area;
-            saveConfig();
+            if (changed) saveConfig();
         }
     }
 
@@ -2038,6 +2039,9 @@ public class MenuUP {
     public static void showMenu() {
         loadConfig();
         mVector menu = new mVector("Auto");
+        menu.addElement(new iCommand("Hiển thị & giảm lag >", new IAction() {
+            public void perform() { RenderSettings.show(); }
+        }));
         menu.addElement(new iCommand("Tự động cho pet ăn >", new IAction() {
             public void perform() { AutoPetFeed.show(); }
         }));

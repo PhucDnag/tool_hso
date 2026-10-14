@@ -169,7 +169,7 @@ public final class AutoFarmSupport {
             if(!(i==0?fireEnabled:i==1?oilEnabled:bookEnabled) || time<nextUse[i]) continue;
             if(i==1 && (time>=fireUntil || fireMap!=GameCanvas.loadmap.idMap || fireArea!=LoadMap.Area)) continue;
             Item item=findItem(i);
-            if(item==null || item.numPotion<=0) {status="Chưa có "+itemName(i);continue;}
+            if(item==null || item.numPotion<=0) {nextUse[i]=time+1000L;status="Chưa có "+itemName(i);continue;}
             if(item.ItemCatagory!=4 && item.ItemCatagory!=7) continue;
             // Native inventory uses command 32 for potions, -107 for materials.
             pendingUse=i;pendingCount=item.numPotion;consumableDeadline=time+15000L;

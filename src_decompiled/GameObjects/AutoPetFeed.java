@@ -102,7 +102,12 @@ public final class AutoPetFeed {
                 if(eligibleEquipment(candidate)){food=candidate;break;}
             }
         }
-        if(food==null){status="Chờ đồ/kẹo hoặc chu kỳ";return;}
+        if(food==null){
+            // Empty bags need not be scanned every frame; retry once per second.
+            if(now>=nextEquipment)nextEquipment=now+1000L;
+            if(now>=nextCandy)nextCandy=now+1000L;
+            status="Chờ đồ/kẹo hoặc chu kỳ";return;
+        }
         pendingId=food.Id;pendingCat=food.ItemCatagory;pendingCount=food.numPotion;pendingKind=kind;deadline=now+15000L;
         if(kind==0)nextEquipment=now+equipmentSeconds*1000L;else nextCandy=now+candySeconds*1000L;
         GlobalService.gI().Pet_Eat((short)pet.Id,(short)food.Id,(byte)food.ItemCatagory,(byte)(Item.VecEquipPlayer.contains(pet)?1:0));

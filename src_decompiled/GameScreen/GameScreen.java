@@ -18,6 +18,7 @@ import GameEffect.EffectMonster;
 import GameEffect.EffectNum;
 import GameEffect.EffectSkill;
 import GameObjects.AutoChat;
+import GameObjects.RenderSettings;
 import InterfaceComponents.IAction;
 import GameEffect.MainEffect;
 import GameObjects.DataSkillEff;
@@ -576,6 +577,7 @@ extends MainScreen {
     }
 
     public void paintMonsterEffect(mGraphics mGraphics2) {
+        if (RenderSettings.hideSkills) return;
         for (int i = 0; i < EffectMonster.listEffectMonster.size(); ++i) {
             EffectMonster effectMonster = (EffectMonster)EffectMonster.listEffectMonster.elementAt(i);
             effectMonster.paint(mGraphics2);
@@ -583,6 +585,7 @@ extends MainScreen {
     }
 
     public void paintMonsterDieEffect(mGraphics mGraphics2) {
+        if (RenderSettings.hideSkills) return;
         for (int i = 0; i < EffectMonster.listEffectMonster.size(); ++i) {
             EffectMonster effectMonster = (EffectMonster)EffectMonster.listEffectMonster.elementAt(i);
             effectMonster.paintDie(mGraphics2);
@@ -590,6 +593,7 @@ extends MainScreen {
     }
 
     public void paint(mGraphics mGraphics2) {
+        RenderSettings.load();
         try {
             int n;
             int n2;
@@ -613,34 +617,37 @@ extends MainScreen {
             }
             mGraphics2.translate(dx, dy);
             mGraphics2.translate(-MainScreen.cameraMain.xCam, -MainScreen.cameraMain.yCam);
-            if (GameCanvas.mapBack != null) {
+            if (!RenderSettings.gridMap && GameCanvas.mapBack != null) {
                 GameCanvas.mapBack.paint(mGraphics2);
             }
             if (LoadMap.idTile == 9) {
                 mGraphics2.setColor(367554);
                 mGraphics2.fillRect(MainScreen.cameraMain.xCam, MainScreen.cameraMain.yCam, GameCanvas.w, GameCanvas.h, false);
             }
-            GameCanvas.loadmap.paint(mGraphics2);
-            infoGame.paintShip(mGraphics2);
+            if (RenderSettings.gridMap) RenderSettings.paintGrid(mGraphics2);
+            else {
+                GameCanvas.loadmap.paint(mGraphics2);
+                infoGame.paintShip(mGraphics2);
+            }
             if (this.isFullScreen) {
                 mGraphics2.drawRecAlpa(0, 0, GameCanvas.loadmap.mapW * 24, GameCanvas.loadmap.mapH * 24, this.colorRec);
             } else if (this.wRec > 0) {
                 mGraphics2.fillRecAlpla(this.xRec, this.yRec, this.wRec, this.hRec, this.colorRec);
             }
-            for (n4 = 0; n4 < vecDataeff.size(); ++n4) {
+            for (n4 = 0; !RenderSettings.hideSkills && n4 < vecDataeff.size(); ++n4) {
                 object2 = (DataSkillEff)vecDataeff.elementAt(n4);
                 if (object2 == null) continue;
                 ((DataSkillEff)object2).paintTop(mGraphics2, ((DataSkillEff)object2).x, ((DataSkillEff)object2).y);
             }
-            for (n4 = 0; n4 < LoadMap.Thacnuoc.size(); ++n4) {
+            for (n4 = 0; !RenderSettings.gridMap && n4 < LoadMap.Thacnuoc.size(); ++n4) {
                 object2 = (ThacNuoc)LoadMap.Thacnuoc.elementAt(n4);
                 ((ThacNuoc)object2).paint(mGraphics2);
             }
-            for (n4 = 0; n4 < vecStep.size(); ++n4) {
+            for (n4 = 0; !RenderSettings.hideSkills && n4 < vecStep.size(); ++n4) {
                 object2 = (Point)vecStep.elementAt(n4);
                 ((Point)object2).paint(mGraphics2);
             }
-            for (n4 = 0; n4 < vecEffInMap.size(); ++n4) {
+            for (n4 = 0; !RenderSettings.hideSkills && n4 < vecEffInMap.size(); ++n4) {
                 object2 = (Point)vecEffInMap.elementAt(n4);
                 ((Point)object2).paint(mGraphics2);
             }
@@ -650,17 +657,17 @@ extends MainScreen {
             if (GameCanvas.isTouch && Player.timeFocus > 0 && GameScreen.player.posTransRoad != null && Player.xFocus >= 0) {
                 PaintInfoGameScreen.fraFocusIngame.drawFrame((4 - Player.timeFocus / 2) % PaintInfoGameScreen.fraFocusIngame.nFrame, Player.xFocus, Player.yFocus, 0, 3, mGraphics2);
             }
-            EffectManager.lowEffects.paintAll(mGraphics2);
+            if (!RenderSettings.hideSkills) EffectManager.lowEffects.paintAll(mGraphics2);
             this.paintMonsterDieEffect(mGraphics2);
-            ItemMap.paintDieHouseArena(mGraphics2);
+            if (!RenderSettings.gridMap) ItemMap.paintDieHouseArena(mGraphics2);
             try {
                 this.p = 0;
-                this.o = 0;
+                this.o = RenderSettings.gridMap ? LoadMap.mItemMap.size() : 0;
                 this.maxob.y = 10000;
                 GameScreen.maxtr.y = 10000;
                 while (this.p < Vecplayers.size() || this.o < LoadMap.mItemMap.size()) {
                     this.ob = this.maxob;
-                    tr = maxtr;
+                    tr = RenderSettings.gridMap ? null : maxtr;
                     if (this.p < Vecplayers.size()) {
                         this.ob = (MainObject)Vecplayers.elementAt(this.p);
                     }
@@ -668,7 +675,7 @@ extends MainScreen {
                         tr = (MainItemMap)LoadMap.mItemMap.elementAt(this.o);
                     }
                     if (tr == null || this.ob.y + this.ob.ysai < GameScreen.tr.y + LoadMap.wTile) {
-                        if (MainObject.isInScreen(this.ob) && !this.ob.isStop && !this.ob.isRemove) {
+                        if (!RenderSettings.hidden(this.ob) && MainObject.isInScreen(this.ob) && !this.ob.isStop && !this.ob.isRemove) {
                             this.ob.paint(mGraphics2);
                             if (this.ob.chat != null && this.ob.chat.strChat != null) {
                                 this.ob.chat.paint(mGraphics2);
@@ -679,7 +686,7 @@ extends MainScreen {
                         ++this.o;
                         continue;
                     }
-                    if (tr.isInScreen() && tr != null) {
+                    if (tr != null && tr.isInScreen()) {
                         tr.paint(mGraphics2);
                     }
                     ++this.o;
@@ -689,12 +696,12 @@ extends MainScreen {
                 exception.printStackTrace();
                 mSystem.outloi("loi gameScreen paint Doi tuong");
             }
-            for (n3 = 0; n3 < arrowsUp.size(); ++n3) {
+            for (n3 = 0; !RenderSettings.hideSkills && n3 < arrowsUp.size(); ++n3) {
                 object2 = (IArrow)arrowsUp.elementAt(n3);
                 if (object2 == null) continue;
                 ((IArrow)object2).paint(mGraphics2);
             }
-            for (n3 = 0; n3 < vecDataeff.size(); ++n3) {
+            for (n3 = 0; !RenderSettings.hideSkills && n3 < vecDataeff.size(); ++n3) {
                 object2 = (DataSkillEff)vecDataeff.elementAt(n3);
                 if (object2 == null) continue;
                 ((DataSkillEff)object2).paintBottom(mGraphics2, ((DataSkillEff)object2).x, ((DataSkillEff)object2).y);
@@ -705,28 +712,28 @@ extends MainScreen {
                 mGraphics2.drawRegion(AvMain.imgSelect, 0, 0, 12, 16, LoadMap.mTranPointChangeMap[((Point)object2).dis], ((Point)object2).x + GameCanvas.gameTick % 6 * ((Point)object2).vx, ((Point)object2).y + GameCanvas.gameTick % 6 * ((Point)object2).vy, 3, false);
                 AvMain.Font3dWhite(mGraphics2, ((Point)object2).name, ((Point)object2).x2 + GameCanvas.gameTick % 6 * ((Point)object2).vx, ((Point)object2).y2 + GameCanvas.gameTick % 6 * ((Point)object2).vy, ((Point)object2).f);
             }
-            if (ObjFocus != null && GameScreen.ObjFocus.typeObject != 1) {
+            if (ObjFocus != null && !RenderSettings.hidden(ObjFocus) && GameScreen.ObjFocus.typeObject != 1) {
                 ObjFocus.paintNameFocus(mGraphics2);
             }
             n3 = VecNum.size();
-            EffectManager.hiEffects.paintAll(mGraphics2);
-            if (vecHightEffAuto.size() > 0) {
+            if (!RenderSettings.hideSkills) EffectManager.hiEffects.paintAll(mGraphics2);
+            if (!RenderSettings.hideSkills && vecHightEffAuto.size() > 0) {
                 for (int i = 0; i < vecHightEffAuto.size(); ++i) {
                     object = (EffectAuto)vecHightEffAuto.elementAt(i);
                     if (object == null) continue;
                     ((EffectAuto)object).paint(mGraphics2);
                 }
             }
-            for (n2 = 0; n2 < n3; ++n2) {
+            for (n2 = 0; !RenderSettings.hideSkills && n2 < n3; ++n2) {
                 object = (MainEffect)VecNum.elementAt(n2);
                 if (!MainEffect.isInScreen(((MainEffect)object).x, ((MainEffect)object).y, 10, 10) || ((MainEffect)object).isRemove || ((MainEffect)object).isStop) continue;
                 ((MainEffect)object).paint(mGraphics2);
             }
-            for (n2 = 0; n2 < vecWeather.size(); ++n2) {
+            for (n2 = 0; !RenderSettings.gridMap && n2 < vecWeather.size(); ++n2) {
                 object = (AnimateEffect)vecWeather.elementAt(n2);
                 ((AnimateEffect)object).paint(mGraphics2);
             }
-            MainObject.paintFocus(mGraphics2);
+            if (!RenderSettings.hidden(ObjFocus)) MainObject.paintFocus(mGraphics2);
             GameCanvas.resetTrans(mGraphics2);
             if (timePaintCmdGiaotiep > 0 && this.cmdGiaotiep != null) {
                 this.cmdGiaotiep.paint(mGraphics2, this.cmdGiaotiep.xCmd, this.cmdGiaotiep.yCmd);
@@ -877,19 +884,20 @@ extends MainScreen {
     }
 
     public void checkPaintNamearena() {
+        if (RenderSettings.hidePlayers) return;
         if (GameCanvas.gameTick % 50 == 0) {
             MainObject mainObject;
             int n;
-            for (n = 0; n < Vecplayers.size() - 1; ++n) {
+            for (n = 0; n < Vecplayers.size(); ++n) {
                 mainObject = (MainObject)Vecplayers.elementAt(n);
-                mainObject.Namearena = false;
+                if (mainObject != null) mainObject.Namearena = false;
             }
             for (n = 0; n < Vecplayers.size() - 1; ++n) {
                 mainObject = (MainObject)Vecplayers.elementAt(n);
                 if (mainObject == null || mainObject.typeObject != 0) continue;
                 for (int i = n + 1; i < Vecplayers.size(); ++i) {
                     MainObject mainObject2 = (MainObject)Vecplayers.elementAt(i);
-                    if (mainObject2.typeObject != 0 || mainObject2 == null || CRes.abs(mainObject.x - mainObject2.x) > 20 || CRes.abs(mainObject.y - mainObject2.y) > 20) continue;
+                    if (mainObject2 == null || mainObject2.typeObject != 0 || CRes.abs(mainObject.x - mainObject2.x) > 20 || CRes.abs(mainObject.y - mainObject2.y) > 20) continue;
                     mainObject.Namearena = true;
                     mainObject2.Namearena = true;
                 }
@@ -929,6 +937,7 @@ extends MainScreen {
                 ((TimecountDown)object2).update();
                 if (!((TimecountDown)object2).wantdestroy) continue;
                 vecTimecountDown.removeElement(object2);
+                --n;
             }
             if (charcountdonw != null) {
                 charcountdonw.update();
@@ -956,7 +965,7 @@ extends MainScreen {
             }
             for (n = 0; n < Vecplayers.size(); ++n) {
                 object2 = (MainObject)Vecplayers.elementAt(n);
-                if (((MainObject)object2).isStop && !((MainObject)object2).isRemove) {
+                if (object2 != null && ((MainObject)object2).isStop && !((MainObject)object2).isRemove) {
                     ++((MainObject)object2).timeStop;
                     if (((MainObject)object2).timeStop < 5) continue;
                     ((MainObject)object2).isRemove = true;
@@ -976,7 +985,7 @@ extends MainScreen {
                 if (!((IArrow)object2).wantDestroy) continue;
                 arrowsUp.removeElementAt(n);
             }
-            CRes.quickSort(Vecplayers);
+            if (RenderSettings.needsSort(Vecplayers)) CRes.quickSort(Vecplayers);
             this.checkPaintNamearena();
             for (n = 0; n < VecNum.size(); ++n) {
                 object2 = (MainEffect)VecNum.elementAt(n);
