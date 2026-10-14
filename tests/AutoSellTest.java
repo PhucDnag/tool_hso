@@ -1,6 +1,7 @@
 package GameObjects;
 
 import CLib.*;
+import GameScreen.GameScreen;
 import Main.GameCanvas;
 import netcommand.global.GlobalService;
 
@@ -120,6 +121,19 @@ public class AutoSellTest {
         check(!AutoSellManager.isTrashItem(negId), "Negative ID item must return false");
     }
 
+    static void setupVillageNpc() {
+        GameScreen.Vecplayers.removeAllElements();
+        MainObject hammer = new MainObject();
+        hammer.name = "Hammer";
+        hammer.typeObject = 2;
+        hammer.x = 100;
+        hammer.y = 100;
+        GameScreen.Vecplayers.addElement(hammer);
+        GameScreen.player.x = 100;
+        GameScreen.player.y = 100;
+        GameScreen.isMapLang = true;
+    }
+
     static void testQueueAndRateLimiting() {
         AutoSellManager.resetSession();
         AutoSellManager.isAutoSellEnabled = true;
@@ -131,7 +145,9 @@ public class AutoSellTest {
         AutoSellManager.isSellOrange = false;
         AutoSellManager.isSellLocked = false;
         AutoSellManager.isSellUpgraded = false;
-        AutoSellManager.delaySellMs = 350L;
+        AutoSellManager.delaySellMs = 1000L; // Mặc định min 1s
+
+        setupVillageNpc();
 
         Item.VecInvetoryPlayer = new mVector();
         MainItem item1 = makeItem(101, "Mu Vai", 3, 0, (byte)0, (byte)0);
@@ -162,29 +178,67 @@ public class AutoSellTest {
         check(GlobalService.lastSoldAction == 1, "Action must be 1 (Sell for gold)");
         check(AutoSellManager.getQueueCount() == 2, "Queue should now have 2 items");
 
-        // Next tick at now = 10200 (only 200ms elapsed, < 350ms): NO sell
-        mSystem.now = 10200;
+        // Next tick at now = 10500 (only 500ms elapsed, < 1000ms): NO sell
+        mSystem.now = 10500;
         AutoSellManager.update();
-        check(GlobalService.sellPackets == 1, "Spam prevention: no sell before delay");
+        check(GlobalService.sellPackets == 1, "Spam prevention: no sell before 1000ms delay");
         check(AutoSellManager.getQueueCount() == 2, "Queue should still have 2 items");
 
-        // Next tick at now = 10360 (> 350ms elapsed): second item sold
-        mSystem.now = 10360;
-        // Simulate server removed item1 from bag
+        // Next tick at now = 11050 (> 1000ms elapsed): second item sold
+        mSystem.now = 11050;
         Item.VecInvetoryPlayer.removeElement(item1);
         AutoSellManager.update();
-        check(GlobalService.sellPackets == 2, "Second item should be sold after 360ms");
+        check(GlobalService.sellPackets == 2, "Second item should be sold after 1050ms");
         check(GlobalService.lastSoldId == 102, "Second sold ID must be 102");
         check(AutoSellManager.getQueueCount() == 1, "Queue should now have 1 item");
 
-        // Next tick at now = 10720 (> 350ms): third item sold
-        mSystem.now = 10720;
+        // Next tick at now = 12100 (> 1000ms): third item sold
+        mSystem.now = 12100;
         Item.VecInvetoryPlayer.removeElement(item2);
         AutoSellManager.update();
         check(GlobalService.sellPackets == 3, "Third item should be sold");
         check(GlobalService.lastSoldId == 103, "Third sold ID must be 103");
         check(AutoSellManager.getQueueCount() == 0, "Queue should now be empty");
         check(AutoSellManager.getTotalSold() == 3, "Total sold should be 3");
+    }
+
+    static void testStandingNearNpcRequired() {
+        AutoSellManager.resetSession();
+        AutoSellManager.isAutoSellEnabled = true;
+        AutoSellManager.delaySellMs = 1000L;
+
+        // Đặt NPC ở xa (x=500, y=500) trong khi Player ở (x=100, y=100) -> Khoảng cách > 45px
+        GameScreen.Vecplayers.removeAllElements();
+        MainObject hammer = new MainObject();
+        hammer.name = "Hammer";
+        hammer.typeObject = 2;
+        hammer.x = 500;
+        hammer.y = 500;
+        GameScreen.Vecplayers.addElement(hammer);
+        GameScreen.player.x = 100;
+        GameScreen.player.y = 100;
+        GameScreen.isMapLang = true;
+
+        Item.VecInvetoryPlayer = new mVector();
+        MainItem item1 = makeItem(301, "Ao Rac", 3, 0, (byte)0, (byte)0);
+        Item.VecInvetoryPlayer.addElement(item1);
+
+        AutoSellManager.scanAndEnqueueTrash();
+        check(AutoSellManager.getQueueCount() == 1, "Queue has 1 trash item");
+
+        GlobalService.sellPackets = 0;
+        mSystem.now = 30000;
+        // Update khi ở xa NPC: KHÔNG ĐƯỢC BÁN!
+        AutoSellManager.update();
+        check(GlobalService.sellPackets == 0, "Must NEVER sell items when far from NPC (anti-ban protection)");
+        check(GameScreen.player.toX == 472, "Player should move towards NPC");
+
+        // Giả lập player đã bước đến cạnh NPC (x=480, y=500 -> cách 20px <= 45px)
+        GameScreen.player.x = 480;
+        GameScreen.player.y = 500;
+        mSystem.now = 32000;
+        AutoSellManager.update();
+        check(GlobalService.sellPackets == 1, "Must sell item once safely standing beside NPC");
     }
 
     static void testFullBagAutoTrigger() {
@@ -199,6 +253,7 @@ public class AutoSellTest {
         }
 
         mSystem.now = 20000;
+        setupVillageNpc();
         AutoSellManager.update();
         check(AutoSellManager.getQueueCount() == 0, "No auto sell when 3 free slots remaining");
 
@@ -209,25 +264,43 @@ public class AutoSellTest {
         check(AutoSellManager.getQueueCount() > 0, "Auto sell MUST trigger when free slots <= 2");
     }
 
+    static void testReturnToVillageWhenBagFullOutside() {
+        AutoSellManager.resetSession();
+        AutoSellManager.isAutoSellEnabled = true;
+        AutoSellManager.minEmptySlots = 2;
+        AutoSellManager.returnMethod = 0; // Relog mode
+        AutoSellManager.isReturningToSell = false;
+        MenuUP.isWaitingReconnect = false;
+
+        Player.maxInven = (short)10;
+        Item.VecInvetoryPlayer = new mVector();
+        for (int i = 0; i < 9; i++) { // 10 - 9 = 1 free slot <= 2
+            Item.VecInvetoryPlayer.addElement(makeItem(400 + i, "Trash " + i, 3, 0, (byte)0, (byte)0));
+        }
+
+        GameScreen.isMapLang = false; // Đang ở ngoài bãi quái
+        mSystem.now = 40000;
+        AutoSellManager.update();
+
+        check(AutoSellManager.isReturningToSell, "isReturningToSell must be true when bag full outside village");
+        check(MenuUP.isWaitingReconnect, "Must trigger reconnect/relog to return to village safely");
+    }
+
     static void testSellConfirmationDialogHandling() {
-        // Test exact server dialog from user screenshot: "Bạn có muốn bán Áo tuyết với giá 1 Vàng không ?"
         GlobalService.dialogReplies = 0;
         String dialogText = "B\u1ea1n c\u00f3 mu\u1ed1n b\u00e1n \u00c1o tuy\u1ebft v\u1edbi gi\u00e1 1 V\u00e0ng kh\u00f4ng ?";
         boolean handled = AutoSellManager.handleDialogServer((short)55, (byte)1, dialogText);
         check(handled, "Dialog_server must intercept sell confirmation dialog");
         check(GlobalService.dialogReplies == 1, "Must reply to server dialog with Ok (value 1)");
 
-        // Test English and Spanish variants
         boolean handledEn = AutoSellManager.handleDialogServer((short)56, (byte)1, "Do you want to sell Snow Armor for price 1 Gold ?");
         check(handledEn, "Must intercept English sell dialog");
         check(GlobalService.dialogReplies == 2, "Must reply to English dialog");
 
-        // Non-sell dialog must NOT be intercepted
         boolean handledParty = AutoSellManager.handleDialogServer((short)57, (byte)1, "Moi vao nhom ?");
         check(!handledParty, "Party dialog must NOT be intercepted by AutoSell");
         check(GlobalService.dialogReplies == 2, "Must not reply to party dialog");
 
-        // Test handleSelectDialog
         CLib.mVector options = new CLib.mVector();
         options.addElement(new InterfaceComponents.iCommand("Ok", 2, 1));
         options.addElement(new InterfaceComponents.iCommand("Huy", 2, 0));
@@ -244,10 +317,39 @@ public class AutoSellTest {
         AutoSellManager.cycleMinEmptySlots();
         check(AutoSellManager.minEmptySlots == 5, "cycleMinEmptySlots from 4 to 5");
         AutoSellManager.cycleMinEmptySlots();
-        check(AutoSellManager.minEmptySlots == 0, "cycleMinEmptySlots from 5 to 0 (OFF)");
+        check(AutoSellManager.minEmptySlots == 7, "cycleMinEmptySlots from 5 to 7");
+        AutoSellManager.cycleMinEmptySlots();
+        check(AutoSellManager.minEmptySlots == 10, "cycleMinEmptySlots from 7 to 10");
+        AutoSellManager.cycleMinEmptySlots();
+        check(AutoSellManager.minEmptySlots == 0, "cycleMinEmptySlots from 10 to 0 (OFF)");
         AutoSellManager.cycleMinEmptySlots();
         check(AutoSellManager.minEmptySlots == 1, "cycleMinEmptySlots from 0 to 1");
-        AutoSellManager.minEmptySlots = 2;
+        AutoSellManager.cycleMinEmptySlots();
+        check(AutoSellManager.minEmptySlots == 2, "cycleMinEmptySlots from 1 to 2");
+    }
+
+    static void testDelayConfiguration() {
+        AutoSellManager.delaySellMs = 1000L;
+        AutoSellManager.cycleDelaySell();
+        check(AutoSellManager.delaySellMs == 1200L, "cycleDelaySell from 1000 to 1200");
+        AutoSellManager.cycleDelaySell();
+        check(AutoSellManager.delaySellMs == 1500L, "cycleDelaySell from 1200 to 1500");
+        AutoSellManager.cycleDelaySell();
+        check(AutoSellManager.delaySellMs == 2000L, "cycleDelaySell from 1500 to 2000");
+        AutoSellManager.cycleDelaySell();
+        check(AutoSellManager.delaySellMs == 2500L, "cycleDelaySell from 2000 to 2500");
+        AutoSellManager.cycleDelaySell();
+        check(AutoSellManager.delaySellMs == 3000L, "cycleDelaySell from 2500 to 3000");
+        AutoSellManager.cycleDelaySell();
+        check(AutoSellManager.delaySellMs == 1000L, "cycleDelaySell from 3000 to 1000");
+    }
+
+    static void testReturnMethodConfiguration() {
+        AutoSellManager.returnMethod = 0;
+        AutoSellManager.cycleReturnMethod();
+        check(AutoSellManager.returnMethod == 1, "cycleReturnMethod from 0 to 1 (GoBack)");
+        AutoSellManager.cycleReturnMethod();
+        check(AutoSellManager.returnMethod == 0, "cycleReturnMethod from 1 to 0 (Relog)");
     }
 
     public static void main(String[] args) {
@@ -260,9 +362,13 @@ public class AutoSellTest {
         check(GlobalService.sellPackets==packetsBefore && GlobalService.homes==homesBefore, "AutoSell must pause during upgrade");
         AutoUpgrade.active=false;
         testQueueAndRateLimiting();
+        testStandingNearNpcRequired();
         testFullBagAutoTrigger();
+        testReturnToVillageWhenBagFullOutside();
         testSellConfirmationDialogHandling();
         testMinEmptySlotsConfiguration();
-        System.out.println("PASS: " + assertions + " checks; AutoSell filter matrix, queue rate limit, full bag trigger, dialog auto-confirm, min empty slots setting");
+        testDelayConfiguration();
+        testReturnMethodConfiguration();
+        System.out.println("PASS: " + assertions + " checks; AutoSell filter matrix, queue rate limit, full bag trigger, NPC proximity check, return to village trigger, dialog auto-confirm, min empty slots, delay settings, return method");
     }
 }

@@ -20,6 +20,7 @@ def method(name):
 stubs = {
 'CLib/mVector.java': 'package CLib; public class mVector extends java.util.Vector {}',
 'CLib/mSystem.java': 'package CLib; public class mSystem { public static long now=10000; public static long currentTimeMillis(){return now;} }',
+'GameObjects/AutoFarmSupport.java': 'package GameObjects; public class AutoFarmSupport { public static int goBackArea(int a){return a;} }',
 'GameScreen/LoginScreen.java': 'package GameScreen; public class LoginScreen { public static String ip="test"; }',
 'GameScreen/LoadMapScreen.java': 'package GameScreen; public class LoadMapScreen { public static boolean isNextMap=true; }',
 'GameScreen/GameScreen.java': """package GameScreen; import GameObjects.*; import CLib.*;

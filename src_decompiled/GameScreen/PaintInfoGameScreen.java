@@ -1164,6 +1164,11 @@ public class PaintInfoGameScreen {
         mGraphics2.setColor(MenuUP.isAnyActive() ? 0x00FF00 : 0x777777);
         mGraphics2.drawRect(xAC, yAC, 28, 16, false);
         mFont.tahoma_7_white.drawString(mGraphics2, "AUTO", xAC + 14, yAC + 3, 2, false);
+        mGraphics2.setColor(0x661111);
+        mGraphics2.fillRect(xAC + 34, yAC, 62, 16, false);
+        mGraphics2.setColor(0xDD5555);
+        mGraphics2.drawRect(xAC + 34, yAC, 62, 16, false);
+        mFont.tahoma_7_white.drawString(mGraphics2, "Tắt tất cả", xAC + 65, yAC + 3, 2, false);
         if (GameScreen.player.Action == 4) {
             return;
         }
@@ -1285,6 +1290,13 @@ public class PaintInfoGameScreen {
     }
 
     public void updatePoiterAll() {
+        // Handle the emergency stop before movement/skill hit targets.
+        int stopX = (taitho == 0 ? 8 : 38) - hShowInGame + 34;
+        if (GameCanvas.isPointerSelect && GameCanvas.isPoint(stopX - 2, 103, 66, 20)) {
+            GameCanvas.isPointerSelect = false;
+            MenuUP.stopAllAuto();
+            return;
+        }
         boolean bl;
         block39: {
             block40: {

@@ -723,6 +723,7 @@ public class MenuUP {
             }
         }
 
+        AutoPetFeed.update();
         AutoSellManager.update();
         GoBackProfile.bind();
         GoBackNavigator.observe();
@@ -925,6 +926,17 @@ public class MenuUP {
         catch (Exception exception) {
             onConnectFail();
         }
+    }
+
+    public static void triggerRelogToVillage() {
+        try {
+            Session_ME.gI().close();
+        } catch (Exception ex) {}
+        GameCanvas.end_Dialog();
+        isWaitingReconnect = true;
+        isReconnectingChar = true;
+        MsgDialog.isAutologin = true;
+        timeTargetReconnect = mSystem.currentTimeMillis() + 600L;
     }
 
     public static void matchLastChar(SelectCharScreen selectCharScreen) {
@@ -1761,8 +1773,44 @@ public class MenuUP {
         GameCanvas.menu2.startAt(mVector2, 2, "C\u00c0I \u0110\u1eb6T GOBACK", false, null);
     }
 
+    public static void stopAllAuto() {
+        loadConfig();
+        GoBackProfile.bind();
+        isAutoReconnect = isWaitingReconnect = isReconnectingChar = false;
+        timeTargetReconnect = 0L;
+        autoReviveMode = 0;
+        reviveState = 0;
+        isReviveCancelled = true;
+        isCheckingGoldRevive = false;
+        isAutoAttack = isAutoHpMp = false;
+        autoMountType = 0;
+        isGoBackEnabled = isGoBackActive = false;
+        isGoBackPaused = true;
+        resumeNativeAutoFire = false;
+        goBackStepInfo = "";
+        stopGoBackMovement();
+        Player.isAutoFire = (byte)-1;
+        Player.isCurAutoFire = false;
+        Player.isAutoHPMP = false;
+        Player.isAutoBuff = 0;
+        Player.autoItem = null;
+        AutoChat.isAutoChat = false;
+        AutoSellManager.stopAll();
+        AutoFarmSupport.stopAll();
+        AutoPetFeed.stopAll();
+        if (AutoUpgrade.active) AutoUpgrade.stop("Đã tắt tất cả auto");
+        MedalFilter.blockWhite = MedalFilter.blockGreen = MedalFilter.blockYellow = MedalFilter.blockPurple = false;
+        MainRMS.setSaveAuto();
+        saveConfig();
+        GameCanvas.addInfoCharCline("Đã tắt tất cả auto");
+    }
+
     public static boolean isAnyActive() {
         return AutoChat.isAutoChat
+            || AutoUpgrade.active
+            || AutoPetFeed.equipmentEnabled || AutoPetFeed.candyEnabled
+            || AutoFarmSupport.zoneEnabled || AutoFarmSupport.fireEnabled || AutoFarmSupport.oilEnabled || AutoFarmSupport.bookEnabled
+            || Player.isAutoFire > -1 || Player.isAutoHPMP || Player.isAutoBuff == 1 || Player.autoItem != null
             || isAutoReconnect
             || autoReviveMode > 0
             || isAutoAttack
@@ -1797,7 +1845,18 @@ public class MenuUP {
             }
         }));
 
-        // 3. Chon mau do can ban >
+        // 3. Cach ve lang (Relog hoac GoBack di bo)
+        String sRet = AutoSellManager.returnMethod == 0 
+            ? "C\u00e1ch v\u1ec1 l\u00e0ng: Tho\u00e1t v\u00e0o l\u1ea1i (Relog)" 
+            : "C\u00e1ch v\u1ec1 l\u00e0ng: \u0110i b\u1ed9 GoBack";
+        mVector2.addElement(new iCommand(sRet, new IAction(){
+            public void perform() {
+                AutoSellManager.cycleReturnMethod();
+                showAutoSellMenu();
+            }
+        }));
+
+        // 4. Chon mau do can ban >
         mVector2.addElement(new iCommand("Ch\u1ecdn M\u00e0u \u0110\u1ed3 C\u1ea7n B\u00e1n >", new IAction(){
             public void perform() {
                 showSellColorMenu();
@@ -1907,10 +1966,17 @@ public class MenuUP {
             }
         }));
 
-        String sDel = "Delay b\u00e1n: " + AutoSellManager.delaySellMs + "ms";
+        long del = AutoSellManager.delaySellMs;
+        String sDel = "Delay b\u00e1n: " + (del / 1000) + "." + ((del % 1000) / 100) + "s (" + del + "ms)";
         mVector2.addElement(new iCommand(sDel, new IAction(){
             public void perform() {
                 AutoSellManager.cycleDelaySell();
+                showSellOptionsAdvMenu();
+            }
+        }));
+
+        mVector2.addElement(new iCommand("V\u1ecb tr\u00ed b\u00e1n: C\u1ea1nh NPC (Ch\u1ed1ng ban)", new IAction(){
+            public void perform() {
                 showSellOptionsAdvMenu();
             }
         }));
@@ -1972,6 +2038,9 @@ public class MenuUP {
     public static void showMenu() {
         loadConfig();
         mVector menu = new mVector("Auto");
+        menu.addElement(new iCommand("Tự động cho pet ăn >", new IAction() {
+            public void perform() { AutoPetFeed.show(); }
+        }));
         menu.addElement(new iCommand("Lửa, dầu & khu 2 >", new IAction() {
             public void perform() { AutoFarmSupport.show(); }
         }));

@@ -72,6 +72,16 @@ public final class AutoFarmSupport {
         } catch(Exception e) { }
     }
 
+    public static synchronized void stopAll() {
+        load();
+        zoneEnabled=fireEnabled=oilEnabled=bookEnabled=false;
+        resetRequest();
+        pendingUse=-1;
+        manualPause=true;
+        status="Đã tắt";
+        save();
+    }
+
     private static void resetRequest() {
         requestedArea=-1; paidKind=-1; awaitingConfirm=false;
         queuedCommand=null; queuedIndex=-1;

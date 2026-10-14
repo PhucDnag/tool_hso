@@ -18,6 +18,7 @@ def build():
     os.makedirs(BUILD_DIR, exist_ok=True)
 
     sources = [
+        os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "AutoPetFeed.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "AutoFarmSupport.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "CLib", "mFont.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "DisplayPrivacy.java"),
