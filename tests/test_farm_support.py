@@ -10,7 +10,7 @@ source=(ROOT/'tests/test_autoupgrade.py').read_text(encoding='utf-8')
 exec(source[:source.index('with tempfile.TemporaryDirectory')])
 stubs['InterfaceComponents/iCommand.java']=stubs['InterfaceComponents/iCommand.java'].replace('public String caption;', 'public void perform(){if(action!=null)action.perform();}public String caption;')
 stubs['GameObjects/MenuUP.java']='''package GameObjects;public class MenuUP {
-public static boolean isGoBackActive,isAutoAttack=true;public static int farmMapId=-1;
+public static boolean isGoBackActive,isAutoAttack=true,isGoBackEnabled=true;public static int farmMapId=-1,farmArea=-1;
 public static void showMenu(){}'''+strip+'}'
 stubs['GameObjects/AutoUpgrade.java']='package GameObjects;public class AutoUpgrade {public static boolean active;}'
 stubs['GameScreen/LoadMapScreen.java']='package GameScreen;public class LoadMapScreen {public static boolean isNextMap=true;public int idMap=7;}'

@@ -627,8 +627,10 @@ extends MainScreen {
             if (RenderSettings.gridMap) RenderSettings.paintGrid(mGraphics2);
             else {
                 GameCanvas.loadmap.paint(mGraphics2);
-                infoGame.paintShip(mGraphics2);
             }
+            // Boat rendering also advances boarding and opens ShipScr.
+            // Keep it running when the terrain is replaced by the grid.
+            infoGame.paintShip(mGraphics2);
             if (this.isFullScreen) {
                 mGraphics2.drawRecAlpa(0, 0, GameCanvas.loadmap.mapW * 24, GameCanvas.loadmap.mapH * 24, this.colorRec);
             } else if (this.wRec > 0) {

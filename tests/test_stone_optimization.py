@@ -69,6 +69,10 @@ public static int currentMenuTier = 1; // 1 = Categories, 2 = Maps
 public static int selectedCategory = -1;
 public static String targetMapName = "";
 public static boolean delayed, rootMenu, silent;
+public static boolean missingDestination;
+private void checkNear(){MainObject npc=GoBackNavigator.findStoneNpc();
+if(npc==null || MainObject.getDistance(GameScreen.GameScreen.player.x,GameScreen.GameScreen.player.y,npc.x,npc.y)>48)
+throw new RuntimeException("NPC command sent outside interaction range");}
 public static int expectedRequest=-56, responseNpc=-56, selections, pendingId;
 public static mVector pending;
 public static void deliver(int menu,mVector options){
@@ -83,6 +87,7 @@ public void gohome(byte mode){}
 public void Change_Area(byte a){changes++;Thread_More.LoadMap.Area=a;}
 public void player_move(short x,short y){moves++;}
 public void getlist_from_npc(byte id){
+    checkNear();
     requests++;
     if(id!=expectedRequest) throw new RuntimeException("wrong native request ID: "+id);
     if(silent) return;
@@ -102,6 +107,7 @@ public void getlist_from_npc(byte id){
     else deliver(10,opts);
 }
 public void Dynamic_Menu(short id, byte menu, byte index){
+    checkNear();
     if(id!=responseNpc) throw new RuntimeException("response NPC ID was not preserved: "+id);
     selections++;
     lastNpcId = id; lastMenuId = menu; lastIndex = index;
@@ -135,6 +141,10 @@ public void Dynamic_Menu(short id, byte menu, byte index){
         } else if (index == 4) { // Lv 90 - 109
             mapOpts.addElement(new iCommand("R\\u1eebng Medusa"));
             mapOpts.addElement(new iCommand("V\\u1ecbnh Caribe"));
+        }
+        if(missingDestination && index==1) {
+            mapOpts.removeElementAt(4);
+            mapOpts.insertElementAt(new iCommand("Bo bien"),4);
         }
         Main.GameCanvas.menu2.isShowMenu=true;
         deliver(20,mapOpts);
@@ -193,9 +203,29 @@ public class TestTwoTierStone {
         GlobalService.expectedRequest=protocolId; GlobalService.responseNpc=replyId;
         GlobalService.delayed=delayed; GlobalService.rootMenu=true; GlobalService.silent=false;
         GlobalService.pending=null;
+        GlobalService.missingDestination=false;
         GoBackNavigator.observe();
     }
     static void asyncAndTimeouts() {
+        setup("missing-map-nearby",700,-56,-56,false);
+        GlobalService.rootMenu=false;GlobalService.missingDestination=true;
+        for(int i=0;i<100 && GlobalService.lastMenuId!=20;i++){mSystem.now+=100;MenuUP.tick();movePlayer();}
+        check(GlobalService.lastMenuId==20 && GlobalService.lastIndex==5,"missing target must choose closest offered cliff over coast then walk to reef");
+        check(GlobalService.requests==1 && GlobalService.selections==2,"missing target reopened menu instead of selecting nearby landing");
+
+        setup("far-stone",700,-56,-56,false);
+        GameScreen.player.x=204;GameScreen.player.y=204;
+        mSystem.now+=100;MenuUP.tick();
+        check(GlobalService.requests==0 && GlobalService.selections==0,"opened distant stone");
+        for(int i=0;i<100 && GlobalService.requests==0;i++){mSystem.now+=100;MenuUP.tick();movePlayer();}
+        check(GlobalService.requests==1,"failed to approach stone before requesting menu");
+        GameScreen.player.x=204;GameScreen.player.y=204;GameScreen.player.posTransRoad=null;
+        int before=GlobalService.selections;
+        mSystem.now+=100;MenuUP.tick();
+        check(GlobalService.selections==before,"selected submenu after moving out of range");
+        for(int i=0;i<150 && GlobalService.lastMenuId!=20;i++){mSystem.now+=100;MenuUP.tick();movePlayer();}
+        check(GlobalService.lastMenuId==20,"did not reapproach before using stone");
+
         setup("signed-async",700,-56,200,true);
         boolean done=false;
         for(int i=0;i<100;i++) {

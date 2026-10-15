@@ -65,6 +65,39 @@ public class GoBackTest {
         finite.scan(x,new String[]{"b"},new int[]{1},new int[]{1});
         finite.scan(y,new String[]{"a"},new int[]{1},new int[]{1});
         check(finite.plan(x,z)==null && finite.plan(y,z)==null,"endless two-map loop");
+
+        // A cached stone can make a useless landing look closer than the real
+        // walking route. Even previously used remote stones must not lure GoBack.
+        GoBackRoutes direct=new GoBackRoutes();
+        int home=direct.node("home",1),wrong=direct.node("wrong",3);
+        int coast=direct.node("coast",11),cliff=direct.node("cliff",12),reef=direct.node("reef",13);
+        GoBackRoutes.Exit badLanding=direct.exit(home,wrong,12,12,9);
+        GoBackRoutes.Exit cached=direct.exit(wrong,reef,12,12,9);direct.confirm(cached,reef);
+        GoBackRoutes.Exit goodLanding=direct.exit(home,coast,12,12,9);
+        direct.exit(coast,cliff,24,24,-1);direct.exit(cliff,reef,24,24,-1);
+        check(direct.plan(home,reef).first==badLanding,"fixture must reproduce cached shortcut");
+        check(direct.planReturn(home,reef,null).first==goodLanding,"return followed remote cached stone");
+        GoBackRoutes.Exit exact=direct.exit(home,reef,12,12,9);
+        check(direct.planReturn(home,reef,null).first==exact,"direct destination must win");
+        direct.block(exact);
+        check(direct.planReturn(home,reef,null).first==goodLanding,"fallback needs complete walking continuation");
+        GoBackRoutes persisted=GoBackRoutes.load(direct.save());
+        persisted.block((GoBackRoutes.Exit)persisted.get(home).exits.lastElement());
+        check(persisted.planReturn(home,reef,null).first.to==coast,"old RMS stone routes reintroduced detour");
+
+        GoBackRoutes levels=new GoBackRoutes();
+        int city=levels.node("city",67),high=levels.node("high",63),shore=levels.node("shore",70);
+        int low=levels.node("low",68),middle=levels.node("middle",69);
+        levels.exit(city,high,12,12,-1);levels.exit(high,shore,12,12,-1);
+        GoBackRoutes.Exit safe=levels.exit(city,low,24,24,-1);
+        levels.exit(low,middle,12,12,-1);levels.exit(middle,shore,12,12,-1);
+        check(levels.planReturn(city,shore,null).first==safe,"shortcut wandered into higher-level group");
+        check(levels.planReturn(city,high,null)!=null,"explicit higher-level destination must remain reachable");
+        check(levels.planReturn(high,shore,null)!=null,"must allow leaving a higher-level starting map");
+        java.util.Hashtable visited=new java.util.Hashtable();visited.put(new Integer(low),Boolean.TRUE);
+        check(levels.planReturn(city,shore,visited)==null,"blocked route must stop instead of revisit or climb levels");
+        visited.clear();visited.put(new Integer(shore),Boolean.TRUE);
+        check(levels.planReturn(city,shore,visited)!=null,"saved goal must remain reachable");
     }
     static void setMap(int id,String name,String[] names) {
         GameCanvas.loadmap=new LoadMap(); GameCanvas.loadmap.idMap=id;GameCanvas.loadmap.nameMap=name;
@@ -151,6 +184,92 @@ public class GoBackTest {
         }
         check(transitions==0 && GoBackNavigator.status.indexOf("Chua co lo trinh")>=0,"unknown target must not cause any map exploration");
     }
+    static void noBacktracking() {
+        newRun("no-backtracking",401,"saved");
+        setMap(400,"passage",new String[]{"saved"});GoBackNavigator.observe();
+        setMap(1,"village",new String[]{"passage"});
+        boolean crossed=false;
+        for(int tick=0;tick<300;tick++) {
+            mSystem.now+=100;MenuUP.tick();movePlayer();
+            if(!crossed && exitTouched()==0) {
+                crossed=true;
+                // The live map contradicts the stored continuation. An alternative
+                // through the starting map must not send the player backwards.
+                setMap(400,"passage",new String[]{"village"});
+                GoBackRoutes g=GoBackNavigator.graph;
+                int alternate=g.node("alternate",402);
+                g.exit(g.byId(1),alternate,204,108,-1);
+                g.exit(alternate,g.byId(401),204,108,-1);
+            } else if(crossed) {
+                check(exitTouched()<0,"GoBack returned to a visited map after route changed");
+            }
+        }
+        check(crossed && GoBackNavigator.status.indexOf("Chua co lo trinh")>=0,"invalid continuation must stop clearly");
+        check(MenuUP.farmMapId==401 && MenuUP.farmX==84 && MenuUP.farmY==84,"replanning changed saved destination");
+    }
+    static void instantMapResume() throws Exception {
+        newRun("instant-map",401,"saved");
+        setMap(400,"passage",new String[]{"saved"});GoBackNavigator.observe();
+        setMap(1,"village",new String[]{"passage"});
+        GameCanvas.currentScreen=new Object();GameCanvas.timeNow=0;
+        LoadMapScreen loader=new LoadMapScreen();
+        for(int i=0;i<100;i++)Thread_More.SaveImageRMS.vecSaveImage.addElement("image");
+        check(loader.canLeave(),"image write queue delayed ready GoBack map");
+        check(!GoBackNavigator.ready(),"navigation started before game screen and map acknowledgement");
+        LoadMapScreen.isNextMap=false;
+        check(!loader.canLeave(),"incomplete map bypassed load gate");LoadMapScreen.isNextMap=true;
+        loader.isLoadSkill=false;
+        check(!loader.canLeave(),"initial skills handshake bypassed");loader.isLoadSkill=true;
+        MainRMS.isLoadBegin=false;
+        check(!loader.canLeave(),"initial RMS handshake bypassed");MainRMS.isLoadBegin=true;
+        int[] tiles=GameCanvas.loadmap.mapType;GameCanvas.loadmap.mapType=null;
+        check(!loader.canLeave(),"missing collision map bypassed load gate");GameCanvas.loadmap.mapType=tiles;
+        MenuUP.isGoBackPaused=true;
+        check(!loader.canLeave(),"paused GoBack bypassed normal loading");MenuUP.isGoBackPaused=false;
+        MenuUP.isGoBackEnabled=false;
+        check(!loader.canLeave(),"disabled GoBack bypassed normal loading");MenuUP.isGoBackEnabled=true;
+        GameScreen.player.hp=0;
+        check(!loader.canLeave(),"dead player bypassed normal loading");GameScreen.player.hp=100;
+        Thread_More.SaveImageRMS.vecSaveImage.removeAllElements();
+
+        GameCanvas.currentScreen=GameCanvas.game;
+        GameScreen.player.x=36;GameScreen.player.y=36;
+        int writes=Model.CRes.writes;
+        MenuUP.tick(); // No clock advance: first ready frame in the village.
+        check(GameScreen.player.posTransRoad!=null && (GameScreen.player.toX!=36 || GameScreen.player.toY!=36),
+            "village delayed walking for absent stone or current-cell waypoint");
+        check(Model.CRes.writes==writes,"route persistence blocked departure frame");
+        java.lang.reflect.Field wait=GoBackNavigator.class.getDeclaredField("waitUntil");wait.setAccessible(true);
+        java.lang.reflect.Field replan=GoBackNavigator.class.getDeclaredField("nextPlan");replan.setAccessible(true);
+        wait.setLong(null,mSystem.now+30000L);replan.setLong(null,mSystem.now+2000L);
+        setMap(400,"passage",new String[]{"saved"});
+        GameScreen.player.x=36;GameScreen.player.y=36;
+        MenuUP.tick();
+        check(GameScreen.player.posTransRoad!=null && (GameScreen.player.toX!=36 || GameScreen.player.toY!=36),
+            "new map retained preceding leg timeout");
+        check(Model.CRes.writes==writes,"map transition wrote graph before continuing");
+        setMap(401,"saved",new String[0]);LoadMap.Area=3;
+        GameScreen.player.x=36;GameScreen.player.y=36;
+        MenuUP.tick();
+        check(GameScreen.player.posTransRoad!=null,"target map delayed coordinate movement");
+        for(int tick=0;tick<100 && MenuUP.isGoBackActive;tick++) {movePlayer();mSystem.now+=50;MenuUP.tick();}
+        check(!MenuUP.isGoBackActive && GameScreen.player.x==84 && GameScreen.player.y==84,"continuous return missed saved coordinates");
+        check(Model.CRes.writes>writes,"arrival failed to persist deferred routes");
+
+        newRun("instant-alternate",401,"saved");
+        setMap(400,"passage",new String[]{"saved","saved"});
+        GameScreen.player.x=84;GameScreen.player.y=108;
+        for(int row=0;row<10;row++)GameCanvas.loadmap.mapType[row*10+1]=1;
+        MenuUP.tick();
+        check(GameScreen.player.posTransRoad!=null && GameScreen.player.toX>84,
+            "unreachable nearest portal delayed reachable alternative by replan timer");
+
+        newRun("west-shore-ready",401,"saved");
+        setMap(70,"Khu bo tay",new String[]{"saved"});
+        GameScreen.player.x=36;GameScreen.player.y=36;
+        MenuUP.tick();
+        check(GameScreen.player.posTransRoad!=null,"west shore inserted a delay after map became ready");
+    }
     static void atlas() {
         GoBackRoutes g=new GoBackRoutes();GoBackAtlas.seed(g);
         int start=g.byName("lang soi trang"),target=g.byName("rang da ngam");
@@ -205,7 +324,8 @@ public class GoBackTest {
         GlobalService.rejectArea=true;LoadMap.Area=0;
         for(int i=0;i<5;i++){mSystem.now+=6000;MenuUP.tick();}
         for(int i=0;i<100;i++){mSystem.now+=100;MenuUP.tick();movePlayer();}
-        check(GlobalService.changes<=3 && !MenuUP.isGoBackActive && Player.isAutoFire==1,"area fallback did not resume combat");
+        check(GlobalService.changes<=3 && MenuUP.isGoBackActive && Player.isAutoFire!=1,
+            "rejected saved area must not resume combat in wrong area");
     }
     static void snapshotsAndTimeouts() {
         newRun("snapshot",-1,"");setMap(134,"new high map",new String[0]);
@@ -399,6 +519,49 @@ public class GoBackTest {
         check(done && Math.abs(GameScreen.player.x-MenuUP.farmX)<=6,"large-map / watchdog recovery failed");
         nativeMovement=false;
     }
+    static void stableWaypoints() {
+        newRun("stable-waypoint",401,"saved");setMap(401,"saved",new String[0]);LoadMap.Area=3;
+        GameScreen.player.x=36;GameScreen.player.y=36;MenuUP.tick();
+        int tx=GameScreen.player.toX,ty=GameScreen.player.toY;
+        for(int i=0;i<35;i++) {
+            // Native collision/correction can cancel the road before arrival.
+            GameScreen.player.posTransRoad=null;GameScreen.player.toX=36;GameScreen.player.toY=36;
+            mSystem.now+=100;MenuUP.tick();
+            check(GameScreen.player.toX==tx && GameScreen.player.toY==ty,"brief lag/cancel skipped waypoint or stepped sideways");
+        }
+        for(int i=0;i<100 && MenuUP.isGoBackActive;i++){movePlayer();mSystem.now+=100;MenuUP.tick();}
+        check(!MenuUP.isGoBackActive && GameScreen.player.x==84 && GameScreen.player.y==84,"short lag failed to resume saved coordinates");
+
+        newRun("persistent-stall",401,"saved");setMap(400,"passage",new String[]{"saved","saved"});
+        GameScreen.player.x=36;GameScreen.player.y=36;MenuUP.tick();
+        GoBackRoutes.Node here=GoBackNavigator.graph.get(GoBackNavigator.graph.byId(400));
+        for(int i=0;i<150;i++){mSystem.now+=100;MenuUP.tick();}
+        check(GameScreen.player.posTransRoad==null && GoBackNavigator.status.indexOf("bi ket")>=0,"permanent stall must stop clearly");
+        for(int i=0;i<here.exits.size();i++)check(!((GoBackRoutes.Exit)here.exits.elementAt(i)).blocked,"stall incorrectly rejected portal and switched route");
+        check(MenuUP.farmMapId==401 && MenuUP.farmX==84 && MenuUP.farmY==84,"stall changed saved target");
+
+        newRun("new-obstacle",401,"saved");setMap(401,"saved",new String[0]);LoadMap.Area=3;
+        MenuUP.farmX=180;MenuUP.farmY=36;
+        GameScreen.player.x=36;GameScreen.player.y=36;MenuUP.tick();
+        GameCanvas.loadmap.mapType[13]=1; // Wall appears on the original straight segment.
+        for(int i=0;i<63;i++){mSystem.now+=100;MenuUP.tick();}
+        for(int i=0;i<200 && MenuUP.isGoBackActive;i++){movePlayer();mSystem.now+=100;MenuUP.tick();}
+        check(!MenuUP.isGoBackActive && GameScreen.player.x==180 && GameScreen.player.y==36,"sustained obstacle did not replan to same endpoint");
+
+        newRun("hidden-obstacle",401,"saved");setMap(401,"saved",new String[0]);LoadMap.Area=3;
+        MenuUP.farmX=180;MenuUP.farmY=36;GameScreen.player.x=36;GameScreen.player.y=36;
+        for(int i=0;i<250;i++) {
+            mSystem.now+=100;MenuUP.tick();
+            Player p=GameScreen.player;
+            // Server blocks the cell (3,1), which the client's tile data misses.
+            boolean blocked=p.x==60 && p.y/24==1 && p.toX>p.x;
+            if(!blocked)movePlayer();
+            check(!(p.x/24==3 && p.y/24==1),"retried the same hidden obstacle after recovery");
+            if(!MenuUP.isGoBackActive)break;
+        }
+        check(!MenuUP.isGoBackActive && GameScreen.player.x==180 && GameScreen.player.y==36,
+            "unrecorded obstacle must be remembered and bypassed to same target");
+    }
     static void deathReturn() {
         newRun("death-return",134,"reef");setMap(134,"reef",new String[0]);
         GameScreen.player.hp=0;MenuUP.autoReviveMode=0;
@@ -415,10 +578,10 @@ public class GoBackTest {
         check(MenuUP.reviveState==0,"paused GoBack revived anyway");
     }
     public static void main(String[] args) throws Exception {
-        paths();routes();runtime();atlas();teleport();snapshotsAndTimeouts();
+        paths();routes();runtime();noBacktracking();instantMapResume();atlas();teleport();snapshotsAndTimeouts();
         nativeReturn();
         strictMounts();portalRegressions();fiveVillages();largeMapAndRecovery();profiles();
-        deathReturn();
+        stableWaypoints();deathReturn();
         check(MenuUP.stripAccents("  Rặng  Đá Ngầm ").equals("rang da ngam"),"name normalization");
         check(MenuUP.getMapIdByName("Fire extra")==-1,"substring destination matching");
         System.out.println("PASS: "+assertions+" checks; graph, persistence, village regression, obstacles, Lv134, teleport, area retry");

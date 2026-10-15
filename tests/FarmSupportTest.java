@@ -21,8 +21,9 @@ public class FarmSupportTest {
         v.addElement(new iCommand(b,new IAction(){public void perform(){confirmed++;}}));return v;}
     static Item item(int id,String name){Item i=new Item();i.Id=id;i.ItemCatagory=7;i.itemName=name;i.numPotion=3;Item.VecInvetoryPlayer.addElement(i);return i;}
     static void zone(){
-        setup();AutoFarmSupport.zoneEnabled=true;AutoFarmSupport.fallback=3;tick(1);
-        check(AutoFarmSupport.goBackArea(3)==-1,"zone manager owns area choice while GoBack owns route");
+        setup();AutoFarmSupport.zoneEnabled=true;AutoFarmSupport.fallback=3;
+        check(AutoFarmSupport.goBackArea(3)==3,"GoBack must retain saved area even with zone manager enabled");
+        tick(1);
         check(Session_ME.command==51&&Session_ME.value==1,"zone 2 uses zero-based area 1");
         check(!AutoFarmSupport.dialog("Mua vật phẩm bằng ngọc?",options("Ok","Hủy")),"unrelated purchase untouched");
         check(!AutoFarmSupport.dialog("Vào khu 20 bằng ngọc?",options("Ok","Hủy")),"zone 20 cannot be mistaken for zone 2");
@@ -82,5 +83,16 @@ public class FarmSupportTest {
         GameScreen.player.name=name;AutoFarmSupport.load();
         check(AutoFarmSupport.zoneEnabled&&AutoFarmSupport.bookEnabled&&AutoFarmSupport.payment==1&&AutoFarmSupport.fallback==4&&AutoFarmSupport.bookMinutes==15,"settings restored per character");
     }
-    public static void main(String[] args){zone();consumables();profiles();System.out.println("PASS: "+checks+" farm support checks");}
+    static void savedArea(){
+        setup();AutoFarmSupport.zoneEnabled=true;tick(1);
+        check(Session_ME.command==51,"fixture should have a pending automatic zone request");
+        AutoFarmSupport.goBackArea(6);
+        check(!AutoFarmSupport.dynamic(-56,4,"Vao khu 2",options("Dung ngoc","Dung ve Tyche")),"old zone request intercepted return to saved zone");
+        Session_ME.count=0;
+        MenuUP.farmMapId=7;MenuUP.farmArea=6;LoadMap.Area=6;tick(1);
+        check(Session_ME.count==0,"zone manager moved away from saved area 7 after return");
+        check(AutoFarmSupport.goBackArea(6)==6,"saved area lost while zone auto enabled");
+        MenuUP.farmMapId=-1;MenuUP.farmArea=-1;
+    }
+    public static void main(String[] args){zone();consumables();profiles();savedArea();System.out.println("PASS: "+checks+" farm support checks");}
 }

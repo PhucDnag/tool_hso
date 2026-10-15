@@ -164,7 +164,23 @@ public final class GoBackRoutes {
      * Ties in map hops prefer the shortest walk to a reachable exit on this map.
      */
     public Plan plan(int start,int goal) {
+        return plan(start,goal,null,false,true);
+    }
+    /** A return trip may use a local stone, then a complete walking route.
+     * Cached stones on other maps are not evidence of an available shortcut.
+     */
+    public Plan planReturn(int start,int goal,java.util.Hashtable visited) {
+        return plan(start,goal,visited,true,true);
+    }
+    public Plan planWalking(int start,int goal,java.util.Hashtable visited) {
+        return plan(start,goal,visited,true,false);
+    }
+    private Plan plan(int start,int goal,java.util.Hashtable visited,boolean returning,boolean localStone) {
         if(start<0 || start>=nodes.size() || goal<0 || goal>=nodes.size() || goal==start) return null;
+        int ceiling=GoBackAtlas.getCategoryForMap(get(goal).mapId);
+        if(ceiling<1 || ceiling>5) ceiling=0;
+        int origin=GoBackAtlas.getCategoryForMap(get(start).mapId);
+        if(ceiling>0 && origin>=1 && origin<=5) ceiling=Math.max(ceiling,origin);
         int count=nodes.size();
         int[] distance=new int[count], queue=new int[count];
         Exit[] first=new Exit[count];
@@ -177,6 +193,12 @@ public final class GoBackRoutes {
             for(int j=0;j<n.exits.size();j++) {
                 Exit e=(Exit)n.exits.elementAt(j);
                 if(e.blocked || e.to==start) continue;
+                if(returning) {
+                    if(e.npc!=-1 && (!localStone || u!=start)) continue;
+                    if(e.to!=goal && visited!=null && visited.containsKey(new Integer(e.to))) continue;
+                    int category=GoBackAtlas.getCategoryForMap(get(e.to).mapId);
+                    if(e.to!=goal && ceiling>0 && category>ceiling && category<=5) continue;
+                }
                 Exit hop=u==start?e:first[u];
                 int d=distance[u]+1;
                 if(distance[e.to]<0) {

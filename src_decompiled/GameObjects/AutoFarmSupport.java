@@ -86,7 +86,11 @@ public final class AutoFarmSupport {
         requestedArea=-1; paidKind=-1; awaitingConfirm=false;
         queuedCommand=null; queuedIndex=-1;
     }
-    public static int goBackArea(int configured) { load(); return zoneEnabled ? -1 : configured; }
+    public static synchronized int goBackArea(int configured) {
+        load();
+        if(configured>=0 && requestedArea>=0 && requestedArea!=configured) resetRequest();
+        return configured;
+    }
     private static boolean farming() {
         return GameScreen.player!=null && GameScreen.player.hp>0 && GameScreen.player.Action!=4
             && GameCanvas.currentScreen==GameCanvas.game && LoadMapScreen.isNextMap
@@ -143,7 +147,10 @@ public final class AutoFarmSupport {
             } else return;
         }
         if(manualPause || GameCanvas.currentDialog!=null || GameCanvas.menu2.isShowMenu) return;
-        if(zoneEnabled) {
+        // An explicit GoBack location owns the area as well as map/coordinates.
+        // Do not move away again immediately after a successful return.
+        if(zoneEnabled && !(MenuUP.isGoBackEnabled && MenuUP.farmArea>=0
+                && MenuUP.farmMapId==GameCanvas.loadmap.idMap)) {
             int target=blockedDay==day() || time<retryAt ? fallback : 1;
             if(LoadMap.Area!=target) {
                 if(target!=1 && time<retryAt-570000L) return;

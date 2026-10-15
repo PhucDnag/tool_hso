@@ -1,5 +1,36 @@
 # GoBack chống lag, tọa độ minimap và tự cường hóa — 14/10/2026
 
+## 15/10/2026 — Khu đã lưu, khoảng cách NPC và tuyến đá + đi bộ
+
+- GoBack giữ khu được lưu kể cả khi bật Auto khu. Hủy yêu cầu Auto khu khác đang chờ; sau khi tới đích Auto khu không tự kéo nhân vật ra khỏi khu lưu. Nếu đổi khu bị từ chối/quá hạn sau ba lần, dừng báo lỗi, không tự đánh ở khu sai.
+- Đi bộ tới sát đá (đường tiếp cận trong một ô); trước mở menu và từng lựa chọn đều kiểm tra khoảng cách thực tế không quá 48 pixel. Đồng bộ vị trí bằng gói di chuyển gốc trước khi mở menu. Bị đẩy xa thì đi lại gần và mở lại menu, không gửi lựa chọn từ xa. Đây là kiểm soát phía client, không bảo đảm chính sách chống gian lận của server.
+- Đọc các map thật sự có trong menu, gồm tên có hậu tố giá. Loại các đích dự đoán không xuất hiện trong nhóm vừa mở. Khi thiếu map lưu, chọn điểm đáp trong menu có ít chặng đi bộ nhất tới đích, dùng ngay menu hiện có; không mở lại từ đầu hoặc dùng một đá giả định ở map khác. Không dùng tuyến lai nếu đi bộ trực tiếp ít chặng hơn.
+- Va chạm có trong dữ liệu lưới mới được xử lý ngay. Kẹt không có trong lưới qua hai lần kiểm tra (khoảng 4 giây) sẽ ghi nhớ ô phía trước cho riêng lượt đi/map hiện tại rồi tìm đường vòng tới cùng cổng/tọa độ. Không thử lại nguyên đoạn đã kẹt; ô ghi nhớ được xóa khi đổi map/bắt đầu lại hoặc nhân vật thực sự đi vào ô đó.
+- Kiểm thử: 8.957 điều kiện GoBack; menu thiếu Rặng Đá Ngầm chọn Vực Đá thay vì Bờ Biển; lệnh NPC luôn trong 48 pixel, kể cả bị đẩy xa sau mở menu; 35 kiểm tra Auto khu/vật phẩm, gồm giữ khu 7 và hủy yêu cầu khu cũ. Khu bờ tây được kiểm tra chạy ngay khi map sẵn sàng bằng mô phỏng; chưa tái hiện trực tiếp khoảng đứng 10 giây trên server thật.
+
+## 15/10/2026 — Giữ đường khi lag hoặc va chạm
+
+- Lưu riêng điểm di chuyển đang thực hiện. Khi lệnh native bị xóa hoặc server đặt lại `toX/toY`, gửi lại cùng điểm đó; chỉ chuyển điểm tiếp theo sau khi thực sự tới nơi trong sai số di chuyển cho phép.
+- Sau 3 giây không tiến triển vẫn giữ điểm đang đi, bỏ phục hồi bằng bước ngang tùy ý. Từ lần kiểm tra kẹt thứ hai mới tìm lại đường va chạm tới cùng điểm cuối/cổng; tiến triển thực tế đặt lại số lần thử.
+- Kẹt liên tục qua giới hạn thử thì dừng và báo kiểm tra vật cản, giữ đích UP. Không đánh dấu cổng sai hoặc chuyển sang cổng khác chỉ vì nhân vật đứng yên. Có thể bấm “Về Map UP ngay” để thử lại.
+- Kiểm thử bổ sung: hủy lệnh/đặt lại tọa độ đích liên tục trong 3,5 giây không đổi hướng; sau hết lag tiếp tục tới vị trí lưu; kẹt lâu không loại cổng; vật cản mới được đi vòng sau khi xác định kẹt, vẫn đến đúng tọa độ. Kiểm thử dùng mô phỏng, chưa xác minh trên server thật.
+
+## 15/10/2026 — Chạy tiếp ngay sau khi map sẵn sàng
+
+- Khi GoBack bật, có đích và nhân vật còn sống, không đợi hàng đợi ghi ảnh RMS để thoát màn hình tải. Vẫn bắt buộc có gói map hoàn chỉnh, lưới va chạm, dữ liệu kỹ năng và khởi tạo RMS; vẫn gửi xác nhận đổi map bằng luồng gốc.
+- Không ghi toàn bộ đồ thị tuyến ngay khi vừa vào map hoặc đang chạy. Ghi khi tới đích/dừng, trước đổi server, hoặc khi theo dõi đường đi thủ công lúc GoBack không chạy.
+- Nếu đã có đường đi bộ, không đứng chờ NPC đá xuất hiện ở làng. Chỉ giải đường va chạm cho cổng/đá được chọn; dùng khoảng cách Manhattan để phân hạng các tuyến cùng số chặng. Cổng không tới được được loại và chọn tuyến khác trong cùng lượt cập nhật; các đích cùng một đá không tới được được loại cùng lúc.
+- Bỏ bước đứng tại chính tâm ô hiện tại khi bắt đầu đường đi. Giữ các góc rẽ và kiểm tra va chạm, không thay đổi tốc độ nhân vật.
+- Kiểm thử `tests/test_goback.py`: 8.404 điều kiện, gồm hàng đợi 100 ảnh, các điều kiện chưa sẵn sàng, chạy ngay frame đầu, bỏ timeout của map cũ, không ghi RMS lúc xuất phát, tới tọa độ lưu và thử cổng khác ngay. Kiểm thử menu đá hai cấp/chuyển đảo/timeout vẫn qua. Chưa đo độ trễ trên server thật.
+
+## 15/10/2026 — Chặn đường vòng khi về vị trí đã lưu
+
+- GoBack chỉ tính đá dịch chuyển tại map hiện tại; sau điểm đáp phải có đường đi bộ đầy đủ tới đích. Không dùng đá lưu trong cache của map chưa tới để tạo đường tắt giả, kể cả cache cũ.
+- Không quay lại map đã đi qua trong cùng lượt GoBack. Nếu dữ liệu cổng thực tế làm mất tuyến, dừng tại chỗ và báo chưa có lộ trình phù hợp. Bấm “Về Map UP ngay” để bắt đầu lượt tìm đường mới.
+- Với map có nhóm level trong atlas, bỏ các map trung gian cao hơn cả nhóm map xuất phát và đích. Vẫn cho phép chọn đích cấp cao hoặc đi ra khỏi map cấp cao; map chưa biết nhóm không bị áp trần tùy ý.
+- Giữ nguyên vị trí UP đã lưu, tìm tuyến ít lần chuyển map nhất trong các tuyến hợp lệ, sau đó về khu và tọa độ theo cơ chế hiện có.
+- Kiểm thử: `tests/test_goback.py` qua 8.724 điều kiện, gồm cache đá cũ, đường tắt qua map cấp cao, dừng khi cổng thực tế khác tuyến lưu và không ghi đè đích; `tests/test_stone_optimization.py` qua kiểm thử menu hai cấp, chuyển đảo, timeout và đáp map lân cận rồi đi bộ về đích. Chưa xác minh trên server thật.
+
 ## Bản sửa theo phản hồi lượt dịch chuyển thứ hai
 
 - Chờ menu tối đa 15 giây và chờ chuyển map 30 giây. Timeout dịch chuyển được thử lại sau 30 giây, tối đa ba vòng trong một lượt GoBack; vẫn xét tuyến thay thế trong lúc chờ. Chết/hồi sinh bắt đầu lại trạng thái thử đường, không giữ lỗi của lượt trước. Map tới trễ không được dùng để xác nhận nhầm cạnh dịch chuyển khác.

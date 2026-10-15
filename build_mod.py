@@ -39,6 +39,7 @@ def build():
         os.path.join(ROOT_DIR, "src_decompiled", "GameObjects", "GoBackProfile.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "Model", "Menu2.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "GameScreen", "GameScreen.java"),
+        os.path.join(ROOT_DIR, "src_decompiled", "GameScreen", "LoadMapScreen.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "GameScreen", "PaintInfoGameScreen.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "InterfaceComponents", "TabConfig.java"),
         os.path.join(ROOT_DIR, "src_decompiled", "InterfaceComponents", "TabRebuildItem.java"),

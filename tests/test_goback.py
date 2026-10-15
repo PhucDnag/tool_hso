@@ -8,6 +8,8 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+loader = (ROOT / 'src_decompiled/GameScreen/LoadMapScreen.java').read_text(encoding='utf-8')
+load_condition = re.search(r'if \((isNextMap && .*?)\) \{', loader).group(1)
 source = (ROOT / 'src_decompiled/GameObjects/MenuUP.java').read_text(encoding='utf-8')
 def method(name):
     start = re.search(r'    (?:public|private) static \S+ ' + name + r'\(', source).start()
@@ -23,7 +25,11 @@ stubs = {
 'CLib/mVector.java': 'package CLib; public class mVector extends java.util.Vector {}',
 'CLib/mSystem.java': 'package CLib; public class mSystem { public static long now=10000; public static long currentTimeMillis(){return now;} }',
 'GameScreen/LoginScreen.java': 'package GameScreen; public class LoginScreen { public static String ip="test"; }',
-'GameScreen/LoadMapScreen.java': 'package GameScreen; public class LoadMapScreen { public static boolean isNextMap=true; }',
+'GameScreen/LoadMapScreen.java': '''package GameScreen; import Main.GameCanvas;import GameObjects.MainRMS;import Thread_More.SaveImageRMS;
+public class LoadMapScreen {public static boolean isNextMap=true; public boolean isLoadSkill=true;long time;
+public boolean canLeave(){return ''' + load_condition + ';}}',
+'GameObjects/MainRMS.java': 'package GameObjects;public class MainRMS {public static boolean isLoadBegin=true;}',
+'Thread_More/SaveImageRMS.java': 'package Thread_More;public class SaveImageRMS {public static CLib.mVector vecSaveImage=new CLib.mVector();}',
 'GameScreen/GameScreen.java': """package GameScreen; import GameObjects.*; import CLib.*;
 public class GameScreen { public static Player player=new Player(); public static MainObject ObjFocus;
 public static boolean isMapLang; public static mVector Vecplayers=new mVector(); }""",
@@ -45,7 +51,7 @@ public class LoadMap { public static int wTile=24; public static byte Area;
 public static mVector vecPointChange=new mVector(); public int idMap,mapW=10,mapH=10;
 public String nameMap=""; public int[] mapType=new int[100]; }""",
 'Main/GameCanvas.java': """package Main; import Thread_More.*;
-public class GameCanvas { public static Object game=new Object(),currentScreen=game;
+public class GameCanvas { public static Object game=new Object(),currentScreen=game;public static long timeNow;
 public static LoadMap loadmap=new LoadMap(); public static int IndexServer=0;
 public static Model.Menu2 menu2=new Model.Menu2(); public static void addInfoCharCline(String s){} public static void end_Dialog(){} }""",
 'Model/Menu2.java': 'package Model; public class Menu2 {public boolean isShowMenu;}',
@@ -53,8 +59,8 @@ public static Model.Menu2 menu2=new Model.Menu2(); public static void addInfoCha
 'Model/Point.java': 'package Model; public class Point {public int x,y,dis;public String name;}',
 'Model/T.java': 'package Model; public class T {public static String[] mapName=new String[]{"Small Village","Wolf Village","Mines","Edge","Fire","Forest","Canyon"};}',
 'Model/CRes.java': """package Model; public class CRes {
-static java.util.Hashtable rms=new java.util.Hashtable();
-public static byte[] loadRMS(String k){return (byte[])rms.get(k);} public static void saveRMS(String k,byte[] v){rms.put(k,v);} }""",
+static java.util.Hashtable rms=new java.util.Hashtable();public static int writes;
+public static byte[] loadRMS(String k){return (byte[])rms.get(k);} public static void saveRMS(String k,byte[] v){writes++;rms.put(k,v);} }""",
 'InterfaceComponents/iCommand.java': 'package InterfaceComponents; public class iCommand { public String caption; public iCommand(String s){caption=s;} }',
 'netcommand/global/GlobalService.java': """package netcommand.global; import GameObjects.*; import CLib.*; import InterfaceComponents.*;
 public class GlobalService {static GlobalService s=new GlobalService(); public static int changes,lastIndex=-1,requests,moves; public static boolean rejectArea;

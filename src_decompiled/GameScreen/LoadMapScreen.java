@@ -70,7 +70,7 @@ extends MainScreen {
         } else if (GameCanvas.currentDialog == null) {
             // empty if block
         }
-        if (isNextMap && this.isLoadSkill && MainRMS.isLoadBegin && (SaveImageRMS.vecSaveImage.size() <= 5 || (GameCanvas.timeNow - this.time) / 1000L > 45L)) {
+        if (isNextMap && this.isLoadSkill && MainRMS.isLoadBegin && (GameObjects.GoBackNavigator.canResumeMap() || SaveImageRMS.vecSaveImage.size() <= 5 || (GameCanvas.timeNow - this.time) / 1000L > 45L)) {
             if (GameScreen.help.setStep_Next(0, -5)) {
                 GameCanvas.story = new StoryScreen();
                 GameCanvas.story.setContent();
