@@ -335,6 +335,16 @@ extends MainScreen {
     }
 
     public void doArea() {
+        MainObject sign = GameObjects.GoBackNavigator.findAreaSignNpc();
+        if (sign != null && player != null && MainObject.getDistance(player.x, player.y, sign.x, sign.y) > 48) {
+            GameCanvas.addInfoCharCline("H\u00e3y \u0111i l\u1ea1i g\u1ea7n bi\u1ec3n Khu \u0111\u1ec3 \u0111\u1ed5i khu!");
+            player.toX = sign.x;
+            player.toY = sign.y;
+            player.xStopMove = sign.x;
+            player.yStopMove = sign.y;
+            player.countAutoMove = 1;
+            return;
+        }
         GlobalService.gI().Request_Area();
         isReArea = true;
         GameCanvas.start_Wait_Dialog(T.danglaydulieu, new iCommand(T.close, -1));

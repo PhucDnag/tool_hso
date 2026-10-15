@@ -363,6 +363,11 @@ extends MainScreen {
         if (mSystem.isIphone || mSystem.Android && this.cmdCumSv != null) {
             this.cmdCumSv.paint(mGraphics2, 40, GameCanvas.h - 15);
         }
+        if (GameObjects.MenuUP.isWrongLoginWait) {
+            long sec = Math.max(0L, (GameObjects.MenuUP.timeTargetReconnect - mSystem.currentTimeMillis() + 999L) / 1000L);
+            String info = "Sai TK/MK! Tự động thử lại sau: " + GameObjects.MenuUP.formatCountdown(sec);
+            mFont.tahoma_7_red.drawString(mGraphics2, info, GameCanvas.hw, 5, 2, false);
+        }
         super.paint(mGraphics2);
     }
 
@@ -599,6 +604,7 @@ extends MainScreen {
     public void commandTab(int n, int n2) {
         switch (n) {
             case 0: {
+                GameObjects.MenuUP.cancelReconnect();
                 GameCanvas.connect();
                 this.login(tfusername.getText(), tfpassword.getText());
                 GlobalLogicHandler.timeReconnect = 0L;
@@ -622,8 +628,10 @@ extends MainScreen {
                 break;
             }
             case 4: {
+                GameObjects.MenuUP.cancelReconnect();
                 GameCanvas.connect();
                 this.login(username, password);
+                break;
             }
         }
     }

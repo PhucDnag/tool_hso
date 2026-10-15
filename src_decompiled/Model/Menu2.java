@@ -92,6 +92,10 @@ extends AvMain {
     int cmdx;
 
     public void startAt(mVector mVector2, int n, String string, boolean bl, mVector mVector3) {
+        if (string != null && string.equals(Model.T.khuvuc) && GameObjects.MenuUP.handleAreaMenu(mVector2)) {
+            this.isShowMenu = false;
+            return;
+        }
         isLoadData = false;
         this.isSv = false;
         this.waitToPerform = 0;
@@ -449,6 +453,10 @@ extends AvMain {
     }
 
     public void setinfoDynamic(mVector mVector2, int n, int n2, int n3, String string) {
+        if (GameObjects.MenuUP.handleDynamicMenu(n3, n2, string, mVector2)) {
+            this.isShowMenu = false;
+            return;
+        }
         if (GameObjects.AutoFarmSupport.dynamic(n3, n2, string, mVector2)) {
             this.isShowMenu = false;
             return;

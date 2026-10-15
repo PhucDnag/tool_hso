@@ -15,16 +15,33 @@ import java.io.*;
 public final class AutoUpgrade {
     public static final int NONE = 0, THREE = 1, FOUR = 2, COLOR = 3;
     public static final int MAX_LEVEL = 15;
-    public static int targetLevel = 8, currency = 0, delayMs = 500;
+    public static int targetLevel = 8, currency = 0, delayMs = 4000;
     // Index is the level being attempted, e.g. policy[8] is +7 -> +8.
     public static byte[] policy = new byte[MAX_LEVEL + 1];
     public static boolean active;
     public static String status = "Chưa bật";
     public static int attempts;
     public static int sentTier, runTarget, runCurrency;
-    // Native enhancement spends at least 3.7s in its result animation.
-    // Keep that pacing even when the auto UI skips the visual effects.
-    public static final int MIN_ATTEMPT_INTERVAL = 4000;
+    public static final int MIN_ATTEMPT_INTERVAL = 0;
+
+    public static void applyStandardPolicy() {
+        for (int i = 1; i <= MAX_LEVEL; i++) policy[i] = (byte)NONE;
+        // +4 lên +5 sài 3 lá
+        policy[5] = (byte)THREE;
+        // +5 lên +6 sài 4 lá
+        policy[6] = (byte)FOUR;
+        // +8 lên +9 sài 4 lá
+        policy[9] = (byte)FOUR;
+        // +9 lên +10 sài 4 lá
+        policy[10] = (byte)FOUR;
+        // +10 lên +11 sài 4 lá
+        policy[11] = (byte)FOUR;
+        // +12 lên +13 là 3 lá
+        policy[13] = (byte)THREE;
+        // +13 +14 sài đá 3 màu (+13 -> +14 và +14 -> +15)
+        policy[14] = (byte)COLOR;
+        policy[15] = (byte)COLOR;
+    }
     private static final int READY = 0, SELECT = 1, REMOVE = 2, ADD = 3, RESULT = 4;
     private static int state, itemId = -1, cloverId = -1, result = -1;
     private static byte[] runPolicy;
@@ -53,7 +70,7 @@ public final class AutoUpgrade {
     }
 
     public static int parseDelaySeconds(String s) {
-        if (s == null) return 500;
+        if (s == null) return 4000;
         s = s.trim().replace(',', '.');
         int dot = s.indexOf('.');
         int ms = 0;
@@ -69,9 +86,9 @@ public final class AutoUpgrade {
                 ms = sec * 1000 + frac;
             }
         } catch (Exception e) {
-            return -1;
+            return 4000;
         }
-        if (ms < 100) ms = 100;
+        if (ms < 4000) ms = 4000;
         if (ms > 30000) ms = 30000;
         return ms;
     }
@@ -82,8 +99,9 @@ public final class AutoUpgrade {
         owner = id;
         targetLevel = 8;
         currency = 0;
-        delayMs = 500;
+        delayMs = 4000;
         policy = new byte[MAX_LEVEL + 1];
+        applyStandardPolicy();
         try {
             byte[] bytes = CRes.loadRMS(storage(id));
             if (bytes == null) bytes = CRes.loadRMS(legacyStorage(id));
@@ -103,7 +121,8 @@ public final class AutoUpgrade {
             policy = choices;
             if (ver >= 2 && in.available() >= 2) {
                 int d = in.readShort();
-                if (d >= 100 && d <= 30000) delayMs = d;
+                if (d >= 4000 && d <= 30000) delayMs = d;
+                else delayMs = 4000;
             }
         } catch (Exception ex) { /* Defaults remain usable. */ }
     }
@@ -126,7 +145,7 @@ public final class AutoUpgrade {
 
     public static int cloverType(Item item) {
         if (item == null || item.ItemCatagory != 7 || item.typeMaterial != 11) return NONE;
-        String name = MenuUP.stripAccents(item.itemName);
+        String name = MenuUP.stripAccents(item.itemName).toLowerCase();
         if (name.indexOf("3 mau") >= 0 || name.indexOf("ba mau") >= 0 || name.indexOf("tam sac") >= 0) return COLOR;
         if (name.indexOf("4 la") >= 0 || name.indexOf("bon la") >= 0) return FOUR;
         if (name.indexOf("3 la") >= 0 || name.indexOf("ba la") >= 0) return THREE;
@@ -134,10 +153,10 @@ public final class AutoUpgrade {
     }
 
     public static String cloverName(int type) {
-        return type == THREE ? "Cỏ 3 lá" : type == FOUR ? "Cỏ 4 lá" : type == COLOR ? "Cỏ 3 màu" : "Không dùng cỏ";
+        return type == THREE ? "Cỏ 3 lá" : type == FOUR ? "Cỏ 4 lá" : type == COLOR ? "Đá 3 màu" : "Không dùng cỏ";
     }
 
-    private static Item clover(int type) {
+    public static Item clover(int type) {
         for (int i = 0; i < Item.VecInvetoryPlayer.size(); i++) {
             Item item = (Item)Item.VecInvetoryPlayer.elementAt(i);
             if (cloverType(item) == type && item.numPotion > 0) return item;
@@ -199,8 +218,22 @@ public final class AutoUpgrade {
         result = -1;
         TabRebuildItem.isDapnhanh = false;
         TabRebuildItem.isBeginEff = 0;
+        TabRebuildItem.isNextRebuild = 0;
         TabRebuildItem.vecEffRe.removeAllElements();
+        if (itemId != -1) {
+            Item currentItem = Item.getItemInventory(3, (short)itemId);
+            if (currentItem != null) {
+                TabRebuildItem.itemRe = MainItem.MainItem_Item(
+                    currentItem.Id, currentItem.itemNameExcludeLv, currentItem.imageId,
+                    currentItem.tier, currentItem.colorNameItem, currentItem.classcharItem,
+                    (byte)3, currentItem.mInfo, currentItem.type_Only_Item, false,
+                    currentItem.IdTem, currentItem.priceItem, (short)currentItem.LvItem,
+                    currentItem.canSell, currentItem.canTrade, 0, (byte)0, (byte)0
+                );
+            }
+        }
         if (tab != null) {
+            tab.setPaintInfo();
             tab.restoreCommands();
         }
         if (running) {
@@ -306,7 +339,7 @@ public final class AutoUpgrade {
             // for manual enhancement. Selecting it again can leave us waiting
             // for an unnecessary acknowledgement instead of attempting again.
             state = READY;
-            nextAction = Math.max(resultAt + (long)delayMs, lastAttemptAt + MIN_ATTEMPT_INTERVAL);
+            nextAction = resultAt + (long)delayMs;
             status = "Chờ lượt tiếp theo: +" + item.tier + " -> +" + (item.tier + 1);
             result = -1;
             TabRebuildItem.isNextRebuild = 0;
@@ -337,7 +370,7 @@ public final class AutoUpgrade {
         int choice = runPolicy[item.tier + 1];
         Item lucky = choice == NONE ? null : clover(choice);
         if (choice != NONE && lucky == null) {
-            stop("Thiếu " + cloverName(choice) + " cho cấp +" + (item.tier + 1));
+            stop("Không đủ " + cloverName(choice) + " cho cấp +" + (item.tier + 1) + "; đã dừng.");
             return;
         }
         if (TabRebuildItem.isLucky && (lucky == null || TabRebuildItem.itemDaMayMan == null
@@ -386,11 +419,20 @@ public final class AutoUpgrade {
     }
 
     public static synchronized void onInventory() {
-        if (active && state == RESULT) {
+        if (active || itemId != -1) {
             Item item = Item.getItemInventory(3, (short)itemId);
-            if (item != null && TabRebuildItem.itemRe != null) {
-                TabRebuildItem.itemRe.tier = item.tier;
-                TabRebuildItem.itemRe.itemName = item.itemName;
+            if (item != null) {
+                TabRebuildItem.itemRe = MainItem.MainItem_Item(
+                    item.Id, item.itemNameExcludeLv, item.imageId,
+                    item.tier, item.colorNameItem, item.classcharItem,
+                    (byte)3, item.mInfo, item.type_Only_Item, false,
+                    item.IdTem, item.priceItem, (short)item.LvItem,
+                    item.canSell, item.canTrade, 0, (byte)0, (byte)0
+                );
+                if (tab != null) {
+                    tab.setPaintInfo();
+                    tab.restoreCommands();
+                }
             }
         }
     }
@@ -425,7 +467,15 @@ public final class AutoUpgrade {
     }
 
     public static synchronized void onRebuildResult(int nextRebuild, String text) {
-        if (!active || state != RESULT || result >= 0) return;
+        if (!active || state != RESULT || result >= 0) {
+            TabRebuildItem.isBeginEff = 0;
+            TabRebuildItem.isDapnhanh = false;
+            TabRebuildItem.vecEffRe.removeAllElements();
+            if (tab != null) {
+                tab.restoreCommands();
+            }
+            return;
+        }
         if (nextRebuild != 3 && nextRebuild != 4) {
             stop("Kết quả cường hóa không xác định (" + nextRebuild + ").");
             return;
@@ -440,6 +490,7 @@ public final class AutoUpgrade {
         TabRebuildItem.isLucky = false;
         TabRebuildItem.itemDaMayMan = null;
         if (tab != null) {
+            tab.setPaintInfo();
             tab.restoreCommands();
         }
         if (GameCanvas.menu2.isShowMenu && !AutoUpgradeMenu.isShowing) {

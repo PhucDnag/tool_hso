@@ -41,6 +41,11 @@ public class MenuUP {
     public static String lastCharName = "";
     public static byte lastArea = 0;
 
+    // Wrong Login Delay Protection (30 phut)
+    public static final long WRONG_LOGIN_DELAY_MS = 30 * 60 * 1000L;
+    public static boolean isWrongLoginWait = false;
+    public static String wrongLoginReason = "";
+
     // 2. Auto Revive (Tự động hồi sinh khi chết)
     // 0: TẮT, 1: Về Làng, 2: Tại Chỗ
     public static int autoReviveMode = 0;
@@ -300,6 +305,71 @@ public class MenuUP {
             || lower.indexOf("desconectado") != -1;
     }
 
+    public static boolean isWrongLoginString(String string) {
+        if (string == null || string.length() == 0) return false;
+        String s = stripAccents(string).toLowerCase();
+
+        // Failed attempts or temporary lock:
+        if (s.indexOf("dang nhap sai") != -1 || s.indexOf("failed login") != -1
+                || (s.indexOf("tam khoa") != -1 && s.indexOf("30") != -1)
+                || (s.indexOf("khoa") != -1 && s.indexOf("dang nhap") != -1)
+                || (s.indexOf("locked") != -1 && s.indexOf("login") != -1)) {
+            return true;
+        }
+
+        // Direct wrong credentials keywords:
+        boolean hasPassword = s.indexOf("mat khau") != -1 || s.indexOf("password") != -1 || s.indexOf("pass") != -1 || s.indexOf("mk") != -1;
+        boolean hasAccount = s.indexOf("tai khoan") != -1 || s.indexOf("ten dang nhap") != -1 || s.indexOf("username") != -1 || s.indexOf("account") != -1 || s.indexOf("tk") != -1;
+        boolean hasWrong = s.indexOf("khong chinh xac") != -1 || s.indexOf("khong dung") != -1
+                || s.indexOf("khong ton tai") != -1 || s.indexOf("sai") != -1
+                || s.indexOf("incorrect") != -1 || s.indexOf("invalid") != -1
+                || s.indexOf("wrong") != -1 || s.indexOf("not exist") != -1;
+
+        if ((hasPassword || hasAccount) && hasWrong) {
+            if (s.indexOf("vinh vien") != -1 || s.indexOf("permanent") != -1) {
+                return false;
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    public static boolean onLoginFail(String string) {
+        if (isWrongLoginString(string)) {
+            onWrongLogin(string);
+            return true;
+        }
+        return false;
+    }
+
+    public static void onWrongLogin(String reason) {
+        isWaitingReconnect = true;
+        isWrongLoginWait = true;
+        isReconnectingChar = true;
+        wrongLoginReason = reason == null ? "" : reason;
+        timeTargetReconnect = mSystem.currentTimeMillis() + WRONG_LOGIN_DELAY_MS;
+        ++reconnectAttempts;
+
+        GameCanvas.end_Dialog();
+        if (GameCanvas.login != null) {
+            GameCanvas.login.Show();
+        }
+        GameCanvas.addInfoCharCline("Sai TK/MK! Đếm ngược 30 phút đăng nhập lại...");
+    }
+
+    public static String formatCountdown(long sec) {
+        if (sec < 60) return sec + "s";
+        long min = sec / 60;
+        long remSec = sec % 60;
+        if (min >= 60) {
+            long hr = min / 60;
+            long remMin = min % 60;
+            return hr + "h" + (remMin < 10 ? "0" : "") + remMin + "p" + (remSec < 10 ? "0" : "") + remSec + "s";
+        }
+        return min + "p" + (remSec < 10 ? "0" : "") + remSec + "s";
+    }
+
     public static boolean handleSelectDialog(String string, mVector mVector2) {
         loadConfig();
         if (AutoFarmSupport.dialog(string, mVector2)) return true;
@@ -307,6 +377,11 @@ public class MenuUP {
             return false;
         }
         if (AutoSellManager.handleSelectDialog(string, mVector2)) {
+            return true;
+        }
+        // 0. Kiem tra hop thoai sai tk/mk
+        if (isWrongLoginString(string)) {
+            onWrongLogin(string);
             return true;
         }
         // 1. Kiem tra hop thoai mat ket noi
@@ -317,11 +392,12 @@ public class MenuUP {
 
         // 2. Kiem tra hop thoai hoi sinh khi chet
         boolean isDead = (GameScreen.player != null && (GameScreen.player.hp <= 0 || GameScreen.player.Action == 4));
-        if (isDead || isCheckingGoldRevive || reviveState > 0) {
+        if ((isDead || isCheckingGoldRevive || reviveState > 0) && shouldAutoRevive()) {
             String lower = string.toLowerCase();
+            String clean = stripAccents(string);
 
-            // YEU CAU NGOC: TUYET DOI KHONG DUNG NGOC -> TU DONG VE LANG!
-            if (lower.indexOf("ng\u1ecdc") != -1 || lower.indexOf("ngoc") != -1 || lower.indexOf("gem") != -1 || lower.indexOf("ruby") != -1) {
+            // 2.1. YEU CAU NGOC: TUYET DOI KHONG DUNG NGOC -> TU DONG VE LANG!
+            if (clean.indexOf("ngoc") != -1 || clean.indexOf("gem") != -1 || clean.indexOf("ruby") != -1) {
                 isCheckingGoldRevive = false;
                 reviveState = 2;
                 GameCanvas.end_Dialog();
@@ -330,23 +406,10 @@ public class MenuUP {
                 return true;
             }
 
-            // YEU CAU VANG: CHON DUNG VANG!
-            if (lower.indexOf("v\u00e0ng") != -1 || lower.indexOf("vang") != -1 || lower.indexOf("gold") != -1 || lower.indexOf("xu") != -1 || lower.indexOf("coin") != -1) {
-                isCheckingGoldRevive = false;
-                reviveState = 2;
-                if (mVector2 != null && mVector2.size() > 0) {
-                    iCommand cmdOk = (iCommand)mVector2.elementAt(0);
-                    if (cmdOk != null) {
-                        cmdOk.perform();
-                    }
-                }
-                GameCanvas.end_Dialog();
-                GameCanvas.addInfoCharCline("H\u1ed3i sinh t\u1ea1i ch\u1ed7 b\u1eb1ng V\u00c0NG th\u00e0nh c\u00f4ng!");
-                return true;
-            }
-
-            // KHONG DU / KHONG CO VAT PHAM: TU DONG VE LANG
-            if (lower.indexOf("kh\u00f4ng c\u00f3") != -1 || lower.indexOf("khong co") != -1 || lower.indexOf("kh\u00f4ng \u0111\u1ee7") != -1 || lower.indexOf("khong du") != -1) {
+            // 2.2. KHONG DU / KHONG CO VAT PHAM: TU DONG VE LANG
+            if (clean.indexOf("khong co") != -1 || clean.indexOf("khong du") != -1 
+                    || clean.indexOf("not enough") != -1 || clean.indexOf("that bai") != -1 
+                    || clean.indexOf("khong the") != -1) {
                 isCheckingGoldRevive = false;
                 reviveState = 2;
                 GameCanvas.end_Dialog();
@@ -355,13 +418,60 @@ public class MenuUP {
                 return true;
             }
 
-            // HOI VE LANG
-            if (lower.indexOf("v\u1ec1 l\u00e0ng") != -1 || lower.indexOf("ve lang") != -1) {
+            // 2.3. HOI VE LANG
+            if (clean.indexOf("ve lang") != -1 || clean.indexOf("village") != -1) {
                 isCheckingGoldRevive = false;
                 reviveState = 2;
                 GameCanvas.end_Dialog();
                 GlobalService.gI().gohome((byte)0);
                 return true;
+            }
+
+            // 2.4. HOI SINH TAI CHO (Hoi sinh tai cho / Hoi sinh vang / Vat pham)
+            boolean isReviveText = clean.indexOf("hoi sinh") != -1 || clean.indexOf("revive") != -1 
+                    || clean.indexOf("resucitar") != -1 || clean.indexOf("tai cho") != -1 
+                    || clean.indexOf("vang") != -1 || clean.indexOf("gold") != -1 
+                    || clean.indexOf("xu") != -1 || clean.indexOf("coin") != -1;
+
+            if (isReviveText && !isReviveCancelled) {
+                if (autoReviveMode == 2 || isCheckingGoldRevive) {
+                    isCheckingGoldRevive = false;
+                    reviveState = 2;
+                    timeSentRevive = mSystem.currentTimeMillis();
+                    if (mVector2 != null && mVector2.size() > 0) {
+                        boolean clicked = false;
+                        for (int i = 0; i < mVector2.size(); i++) {
+                            iCommand cmd = (iCommand)mVector2.elementAt(i);
+                            if (cmd != null && (cmd.caption == null 
+                                    || cmd.caption.equalsIgnoreCase("ok") 
+                                    || cmd.caption.equalsIgnoreCase("c\u00f3") 
+                                    || cmd.caption.equalsIgnoreCase("co") 
+                                    || cmd.caption.equalsIgnoreCase("\u0111\u1ed3ng \u00fd")
+                                    || cmd.caption.equalsIgnoreCase("dong y")
+                                    || cmd.caption.equalsIgnoreCase("yes")
+                                    || cmd.subIndex == 1)) {
+                                cmd.perform();
+                                clicked = true;
+                                break;
+                            }
+                        }
+                        if (!clicked) {
+                            iCommand cmd0 = (iCommand)mVector2.elementAt(0);
+                            if (cmd0 != null) {
+                                cmd0.perform();
+                            }
+                        }
+                    }
+                    GameCanvas.end_Dialog();
+                    return true;
+                } else if (autoReviveMode == 1 || (autoReviveMode == 0 && shouldAutoRevive())) {
+                    isCheckingGoldRevive = false;
+                    reviveState = 2;
+                    GameCanvas.end_Dialog();
+                    GlobalService.gI().gohome((byte)0);
+                    GameCanvas.addInfoCharCline("[HSO] T\u1ef1 \u0111\u1ed9ng V\u1ec0 L\u00c0NG!");
+                    return true;
+                }
             }
         }
         return false;
@@ -378,6 +488,11 @@ public class MenuUP {
         if (AutoSellManager.handleSingleDialog(string, iCommand2)) {
             return true;
         }
+        // 0. Kiem tra hop thoai sai tk/mk
+        if (isWrongLoginString(string)) {
+            onWrongLogin(string);
+            return true;
+        }
         // 1. Kiem tra mat ket noi
         if (isAutoReconnect && isDisconnectString(string)) {
             onDisconnect();
@@ -386,11 +501,12 @@ public class MenuUP {
 
         // 2. Kiem tra hoi sinh khi chet
         boolean isDead = (GameScreen.player != null && (GameScreen.player.hp <= 0 || GameScreen.player.Action == 4));
-        if (isDead || isCheckingGoldRevive || reviveState > 0) {
+        if ((isDead || isCheckingGoldRevive || reviveState > 0) && shouldAutoRevive()) {
             String lower = string.toLowerCase();
+            String clean = stripAccents(string);
 
-            // YEU CAU NGOC: TUYET DOI KHONG DUNG NGOC -> TU DONG VE LANG!
-            if (lower.indexOf("ng\u1ecdc") != -1 || lower.indexOf("ngoc") != -1 || lower.indexOf("gem") != -1 || lower.indexOf("ruby") != -1) {
+            // 2.1. YEU CAU NGOC: TUYET DOI KHONG DUNG NGOC -> TU DONG VE LANG!
+            if (clean.indexOf("ngoc") != -1 || clean.indexOf("gem") != -1 || clean.indexOf("ruby") != -1) {
                 isCheckingGoldRevive = false;
                 reviveState = 2;
                 GameCanvas.end_Dialog();
@@ -399,20 +515,10 @@ public class MenuUP {
                 return true;
             }
 
-            // YEU CAU VANG: CHON VANG!
-            if (lower.indexOf("v\u00e0ng") != -1 || lower.indexOf("vang") != -1 || lower.indexOf("gold") != -1 || lower.indexOf("xu") != -1 || lower.indexOf("coin") != -1) {
-                isCheckingGoldRevive = false;
-                reviveState = 2;
-                if (iCommand2 != null) {
-                    iCommand2.perform();
-                }
-                GameCanvas.end_Dialog();
-                GameCanvas.addInfoCharCline("H\u1ed3i sinh t\u1ea1i ch\u1ed7 b\u1eb1ng V\u00c0NG th\u00e0nh c\u00f4ng!");
-                return true;
-            }
-
-            // KHONG DU / KHONG CO
-            if (lower.indexOf("kh\u00f4ng c\u00f3") != -1 || lower.indexOf("khong co") != -1 || lower.indexOf("kh\u00f4ng \u0111\u1ee7") != -1 || lower.indexOf("khong du") != -1) {
+            // 2.2. KHONG DU / KHONG CO
+            if (clean.indexOf("khong co") != -1 || clean.indexOf("khong du") != -1 
+                    || clean.indexOf("not enough") != -1 || clean.indexOf("that bai") != -1 
+                    || clean.indexOf("khong the") != -1) {
                 isCheckingGoldRevive = false;
                 reviveState = 2;
                 GameCanvas.end_Dialog();
@@ -421,19 +527,142 @@ public class MenuUP {
                 return true;
             }
 
-            // HOI VE LANG
-            if (lower.indexOf("v\u1ec1 l\u00e0ng") != -1 || lower.indexOf("ve lang") != -1) {
+            // 2.3. HOI VE LANG
+            if (clean.indexOf("ve lang") != -1 || clean.indexOf("village") != -1) {
                 isCheckingGoldRevive = false;
                 reviveState = 2;
                 GameCanvas.end_Dialog();
                 GlobalService.gI().gohome((byte)0);
                 return true;
             }
+
+            // 2.4. HOI SINH TAI CHO
+            boolean isReviveText = clean.indexOf("hoi sinh") != -1 || clean.indexOf("revive") != -1 
+                    || clean.indexOf("resucitar") != -1 || clean.indexOf("tai cho") != -1 
+                    || clean.indexOf("vang") != -1 || clean.indexOf("gold") != -1 
+                    || clean.indexOf("xu") != -1 || clean.indexOf("coin") != -1;
+
+            if (isReviveText && !isReviveCancelled) {
+                if (autoReviveMode == 2 || isCheckingGoldRevive) {
+                    isCheckingGoldRevive = false;
+                    reviveState = 2;
+                    timeSentRevive = mSystem.currentTimeMillis();
+                    if (iCommand2 != null) {
+                        iCommand2.perform();
+                    }
+                    GameCanvas.end_Dialog();
+                    return true;
+                } else if (autoReviveMode == 1 || (autoReviveMode == 0 && shouldAutoRevive())) {
+                    isCheckingGoldRevive = false;
+                    reviveState = 2;
+                    GameCanvas.end_Dialog();
+                    GlobalService.gI().gohome((byte)0);
+                    GameCanvas.addInfoCharCline("[HSO] T\u1ef1 \u0111\u1ed9ng V\u1ec0 L\u00c0NG!");
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public static boolean handleDynamicMenu(int idNpc, int idMenu, String title, mVector items) {
+        loadConfig();
+        boolean isDead = (GameScreen.player != null && (GameScreen.player.hp <= 0 || GameScreen.player.Action == 4));
+        if ((isDead || isCheckingGoldRevive || reviveState > 0) && shouldAutoRevive()) {
+            if (items == null || items.size() == 0) {
+                return false;
+            }
+            if (autoReviveMode == 2 || isCheckingGoldRevive) {
+                int chosenIndex = -1;
+                for (int i = 0; i < items.size(); i++) {
+                    iCommand cmd = (iCommand)items.elementAt(i);
+                    if (cmd == null || cmd.caption == null) continue;
+                    String clean = stripAccents(cmd.caption);
+
+                    // TUYET DOI KHONG DUNG NGOC
+                    if (clean.indexOf("ngoc") != -1 || clean.indexOf("gem") != -1 || clean.indexOf("ruby") != -1) {
+                        continue;
+                    }
+
+                    // Uu tien: vat pham hoi sinh, vang, xu, tai cho
+                    if (clean.indexOf("vat pham") != -1 || clean.indexOf("item") != -1 
+                            || clean.indexOf("tai cho") != -1 || clean.indexOf("vang") != -1 
+                            || clean.indexOf("gold") != -1 || clean.indexOf("hoi sinh") != -1) {
+                        chosenIndex = i;
+                        break;
+                    }
+                }
+
+                if (chosenIndex >= 0) {
+                    isCheckingGoldRevive = false;
+                    reviveState = 2;
+                    timeSentRevive = mSystem.currentTimeMillis();
+                    GlobalService.gI().Dynamic_Menu((short)idNpc, (byte)idMenu, (byte)chosenIndex);
+                    GameCanvas.menu2.doCloseMenu();
+                    return true;
+                } else {
+                    // Chi co lua chon dung ngoc -> Khong dung ngoc, tu dong ve lang!
+                    isCheckingGoldRevive = false;
+                    reviveState = 2;
+                    GameCanvas.menu2.doCloseMenu();
+                    GlobalService.gI().gohome((byte)0);
+                    GameCanvas.addInfoCharCline("Y\u00eau c\u1ea7u NG\u1eccC -> T\u1ef1 \u0111\u1ed9ng V\u1ec0 L\u00c0NG (Kh\u00f4ng d\u00f9ng ng\u1ecdc)!");
+                    return true;
+                }
+            } else if (autoReviveMode == 1 || (autoReviveMode == 0 && shouldAutoRevive())) {
+                isCheckingGoldRevive = false;
+                reviveState = 2;
+                GameCanvas.menu2.doCloseMenu();
+                GlobalService.gI().gohome((byte)0);
+                GameCanvas.addInfoCharCline("[HSO] T\u1ef1 \u0111\u1ed9ng V\u1ec0 L\u00c0NG!");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean handleAreaMenu(mVector items) {
+        if (items == null || items.size() == 0) {
+            return false;
+        }
+        loadConfig();
+        if (isGoBackEnabled && !isGoBackPaused && isGoBackActive && farmMapId == GameCanvas.loadmap.idMap && farmArea >= 0) {
+            if (LoadMap.Area == farmArea) {
+                GameCanvas.menu2.doCloseMenu();
+                return true;
+            }
+            int target = farmArea;
+            if (target >= items.size()) {
+                GameCanvas.addInfoCharCline("Map ch\u1ec9 c\u00f3 " + items.size() + " khu; gi\u1eef Khu " + (LoadMap.Area + 1));
+                GameCanvas.menu2.doCloseMenu();
+                farmArea = LoadMap.Area;
+                saveConfig();
+                return true;
+            }
+            if (LoadMap.mStatusArea != null && target < LoadMap.mStatusArea.length && LoadMap.mStatusArea[target] == 2) {
+                GameCanvas.addInfoCharCline("Khu " + (target + 1) + " \u0111ang \u0110\u1ea6Y!");
+            }
+            iCommand cmd = (iCommand)items.elementAt(target);
+            if (cmd != null) {
+                cmd.perform();
+            } else {
+                GlobalService.gI().Change_Area((byte)target);
+            }
+            GameCanvas.menu2.doCloseMenu();
+            GameCanvas.addInfoCharCline("\u0110ang chuy\u1ec3n v\u1ec1 Khu " + (target + 1));
+            return true;
         }
         return false;
     }
 
     public static boolean onDisconnect() {
+        if (isWrongLoginWait) {
+            GameCanvas.end_Dialog();
+            if (GameCanvas.login != null) {
+                GameCanvas.login.Show();
+            }
+            return true;
+        }
         GoBackNavigator.disconnected();
         loadConfig();
         if (!isAutoReconnect) {
@@ -453,6 +682,9 @@ public class MenuUP {
     }
 
     public static void onConnectFail() {
+        if (isWrongLoginWait) {
+            return;
+        }
         if (isAutoReconnect && (isWaitingReconnect || GameCanvas.currentScreen == GameCanvas.login)) {
             isWaitingReconnect = true;
             reconnectDelaySec = 10 + CRes.random(6);
@@ -463,8 +695,10 @@ public class MenuUP {
 
     public static void cancelReconnect() {
         isWaitingReconnect = false;
+        isWrongLoginWait = false;
         isReconnectingChar = false;
         timeTargetReconnect = 0L;
+        wrongLoginReason = "";
         GameCanvas.addInfoCharCline("H\u1ee7y t\u1ef1 \u0111\u0103ng nh\u1eadp l\u1ea1i!");
     }
 
@@ -713,13 +947,18 @@ public class MenuUP {
 
 
         // 4. Xu ly dem nguoc tu dong dang nhap lai
-        if (isAutoReconnect && isWaitingReconnect) {
+        if ((isAutoReconnect || isWrongLoginWait) && isWaitingReconnect) {
             if (GameCanvas.currentDialog != null) {
                 GameCanvas.end_Dialog();
             }
             long now = mSystem.currentTimeMillis();
             if (now >= timeTargetReconnect) {
                 isWaitingReconnect = false;
+                boolean wasWrongLogin = isWrongLoginWait;
+                isWrongLoginWait = false;
+                if (wasWrongLogin) {
+                    GameCanvas.addInfoCharCline("Hết 30 phút; đang thử đăng nhập lại...");
+                }
                 doReconnect();
             }
         }
@@ -881,28 +1120,21 @@ public class MenuUP {
                     GameCanvas.addInfoCharCline("[HSO] T\u1ef1 \u0111\u1ed9ng V\u1ec0 L\u00c0NG!");
                 } else if (autoReviveMode == 2) {
                     boolean hasItem = hasReviveItem();
-                    if (hasItem) {
-                        GlobalService.gI().gohome((byte)1);
-                        GameCanvas.end_Dialog();
-                        String itemName = getReviveItemName();
-                        GameCanvas.addInfoCharCline("H\u1ed3i sinh t\u1ea1i ch\u1ed7 b\u1eb1ng: " + (itemName.length() > 0 ? itemName : "V\u1eadt ph\u1ea9m"));
-                    } else {
-                        isCheckingGoldRevive = true;
-                        GlobalService.gI().gohome((byte)1);
-                        GameCanvas.end_Dialog();
-                    }
+                    isCheckingGoldRevive = !hasItem;
+                    GlobalService.gI().gohome((byte)1);
+                    GameCanvas.end_Dialog();
                 }
             }
             return;
         }
 
         if (reviveState == 2) {
-            if (isCheckingGoldRevive) {
-                if (now - timeSentRevive > 2000L) {
+            if (autoReviveMode == 2 || isCheckingGoldRevive) {
+                if (now - timeSentRevive > 8000L) {
                     isCheckingGoldRevive = false;
                     GlobalService.gI().gohome((byte)0);
                     GameCanvas.end_Dialog();
-                    GameCanvas.addInfoCharCline("Kh\u00f4ng c\u00f3 h\u1ed3i sinh v\u00e0ng -> T\u1ef1 \u0111\u1ed9ng V\u1ec0 L\u00c0NG!");
+                    GameCanvas.addInfoCharCline("Kh\u00f4ng th\u1ec3 h\u1ed3i sinh t\u1ea1i ch\u1ed7 -> T\u1ef1 \u0111\u1ed9ng V\u1ec0 L\u00c0NG!");
                 }
             }
         }
@@ -980,8 +1212,14 @@ public class MenuUP {
                 + " | Chat: " + enabled(AutoChat.isAutoChat);
             if (isAutoHpMp) hudLines[hudLineCount++] = "HP < " + autoHpPercent + "% | MP < " + autoMpPercent + "%";
             if (isWaitingReconnect) {
-                hudLines[hudLineCount++] = "Đăng nhập lại: " + Math.max(0L, (timeTargetReconnect - now + 999L) / 1000L) + "s";
-                hudCancelAction = 1;
+                if (isWrongLoginWait) {
+                    long remainSec = Math.max(0L, (timeTargetReconnect - now + 999L) / 1000L);
+                    hudLines[hudLineCount++] = "Sai TK/MK: chờ " + formatCountdown(remainSec);
+                    hudCancelAction = 1;
+                } else {
+                    hudLines[hudLineCount++] = "Đăng nhập lại: " + Math.max(0L, (timeTargetReconnect - now + 999L) / 1000L) + "s";
+                    hudCancelAction = 1;
+                }
             } else if (reviveState == 1) {
                 hudLines[hudLineCount++] = "Hồi sinh: " + Math.max(0L, (timeTargetRevive - now + 999L) / 1000L) + "s";
                 hudCancelAction = 2;

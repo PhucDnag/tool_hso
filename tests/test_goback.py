@@ -66,6 +66,7 @@ public static byte[] loadRMS(String k){return (byte[])rms.get(k);} public static
 public class GlobalService {static GlobalService s=new GlobalService(); public static int changes,lastIndex=-1,requests,moves; public static boolean rejectArea;
 public static GlobalService gI(){return s;}
 public static int homes,homeMode=-1;public void gohome(byte mode){homes++;homeMode=mode;}
+public void Request_Area(){}
 public void Change_Area(byte a){changes++;if(!rejectArea)Thread_More.LoadMap.Area=a;}
 public void player_move(short x,short y){moves++;}
 public void getlist_from_npc(byte id){requests++;mVector opts=new mVector();

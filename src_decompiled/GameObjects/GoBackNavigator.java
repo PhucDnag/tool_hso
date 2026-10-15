@@ -417,6 +417,22 @@ public final class GoBackNavigator {
         }
         return null;
     }
+    public static boolean areaSign(MainObject npc) {
+        if(npc==null || npc.typeObject!=2 || stone(npc)) return false;
+        String n=key(npc.name);
+        String gt=key(npc.nameGiaotiep);
+        return n.indexOf("khu")>=0 || gt.indexOf("khu")>=0
+            || n.indexOf("area")>=0 || gt.indexOf("area")>=0
+            || n.indexOf("zona")>=0 || gt.indexOf("zona")>=0;
+    }
+    public static MainObject findAreaSignNpc() {
+        if (GameScreen.Vecplayers == null) return null;
+        for (int i = 0; i < GameScreen.Vecplayers.size(); i++) {
+            MainObject obj = (MainObject) GameScreen.Vecplayers.elementAt(i);
+            if (obj!=null && areaSign(obj)) return obj;
+        }
+        return null;
+    }
     // NPC IDs are signed bytes on requests and shorts in dynamic-menu replies.
     private static boolean sameNpc(int a,int b) {
         return a==b || (a>=-128 && a<=255 && b>=-128 && b<=255 && (byte)a==(byte)b);
@@ -590,6 +606,22 @@ public final class GoBackNavigator {
             fsmState = STATE_CHECK_ARRIVAL;
             selected=null; armed=null;
             if(area>=0 && LoadMap.Area!=area) {
+                MainObject sign = findAreaSignNpc();
+                if(sign != null && MainObject.getDistance(p.x, p.y, sign.x, sign.y) > 48) {
+                    status = "Di toi bien khu de doi khu " + (area + 1);
+                    if(road == null && !startWalk(sign.x, sign.y, 1, null)) {
+                        if(!startWalk(sign.x, sign.y, 2, null)) {
+                            stopMovement();
+                        }
+                    }
+                    if(road != null) {
+                        int state = walk();
+                        if(state == 0) return false;
+                        if(state < 0) {
+                            stopMovement();
+                        }
+                    }
+                }
                 stopMovement(); status="Dang doi ve khu "+(area+1);
                 if(now>=nextAreaAttempt) {
                     if(areaAttempts>=3) {
@@ -597,6 +629,7 @@ public final class GoBackNavigator {
                         status="Chua vao duoc khu da luu "+(area+1)+"; da dung, khong UP sai khu.";
                     } else {
                         areaAttempts++; nextAreaAttempt=now+5000L;
+                        GlobalService.gI().Request_Area();
                         GlobalService.gI().Change_Area((byte)area);
                     }
                 }

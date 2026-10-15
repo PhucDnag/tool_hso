@@ -84,6 +84,7 @@ public static void pump(){
 }
 public static GlobalService gI(){return s;}
 public void gohome(byte mode){}
+public void Request_Area(){}
 public void Change_Area(byte a){changes++;Thread_More.LoadMap.Area=a;}
 public void player_move(short x,short y){moves++;}
 public void getlist_from_npc(byte id){

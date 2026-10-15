@@ -22,21 +22,21 @@ public class AutoUpgradeTest {
         GameCanvas.shopNpc.VecTabScreen.removeAllElements();
         tab=new TabRebuildItem();GameCanvas.shopNpc.VecTabScreen.addElement(tab);
         Item.VecInvetoryPlayer.removeAllElements();
-        MainItem gear=item(100,3,1,"Sword");gear.tier=tier;
+        MainItem gear=item(100,3,1,"Sword");gear.tier=(byte)tier;
         // The real forge displays a copy, not the inventory object.
         TabRebuildItem.itemRe=new MainItem();TabRebuildItem.itemRe.Id=100;
-        TabRebuildItem.itemRe.ItemCatagory=3;TabRebuildItem.itemRe.tier=tier;
+        TabRebuildItem.itemRe.ItemCatagory=3;TabRebuildItem.itemRe.tier=(byte)tier;
         item(20,7,999,"Ore");
-        item(31,7,10,"Co 3 la").typeMaterial=11;
-        item(41,7,10,"Co 4 la").typeMaterial=11;
-        item(51,7,10,"Co 3 mau").typeMaterial=11;
+        item(31,7,10,"Co 3 la").typeMaterial=(byte)11;
+        item(41,7,10,"Co 4 la").typeMaterial=(byte)11;
+        item(51,7,10,"Co 3 mau").typeMaterial=(byte)11;
         TabRebuildItem.isLucky=false;TabRebuildItem.itemDaMayMan=null;
         TabRebuildItem.isBeginEff=0;TabRebuildItem.isNextRebuild=0;
         TabRebuildItem.idMaterial=new short[]{20};
         TabRebuildItem.dataRebuild=new DataRebuildItem[15];
         for(int i=0;i<15;i++)TabRebuildItem.dataRebuild[i]=new DataRebuildItem((byte)i,100,5,new byte[]{2});
         AutoUpgrade.loadConfig();AutoUpgrade.targetLevel=target;AutoUpgrade.currency=0;
-        AutoUpgrade.delayMs=500;AutoUpgradeMenu.isShowing=false;
+        AutoUpgrade.delayMs=4000;AutoUpgradeMenu.isShowing=false;
         AutoUpgrade.policy=new byte[16];
         GlobalService.packets=0;GlobalService.attempts=0;
         GameCanvas.notifications=0;
@@ -50,7 +50,7 @@ public class AutoUpgradeTest {
     static void inventory(int tier){
         Item old=Item.getItemInventory(3,(short)100);
         Item.VecInvetoryPlayer.removeElement(old);
-        MainItem next=item(100,3,1,"Sword");next.tier=tier;
+        MainItem next=item(100,3,1,"Sword");next.tier=(byte)tier;
         AutoUpgrade.onInventory();
     }
     static void result(int value){
@@ -98,14 +98,14 @@ public class AutoUpgradeTest {
         check(!AutoUpgrade.active&&GlobalService.attempts==1,"item swap stops");
     }
     static void continuousWithoutReselect(){
-        setup(0,3);AutoUpgrade.delayMs=500;start();
+        setup(0,3);AutoUpgrade.delayMs=4000;start();
         for(int tier=1;tier<=3;tier++){
             check(GlobalService.op==2&&GlobalService.attempts==tier,"next paid attempt without selection acknowledgement");
             result(3);inventory(tier);tick(1);
             if(tier<3){
                 check(GameCanvas.notifications==0,"no per-attempt notifications");
-                tick(3998);check(GlobalService.attempts==tier,"server pacing respected");
-                tick(1);
+                tick(3998);check(GlobalService.attempts==tier,"delay pacing respected");
+                tick(2);
             }
         }
         check(!AutoUpgrade.active&&GlobalService.packets==3,"three upgrades use only three paid packets and stop at target");
@@ -121,12 +121,12 @@ public class AutoUpgradeTest {
         // A leftover native animation value must not acknowledge attempt two.
         TabRebuildItem.isNextRebuild=3;tick(5000);
         check(GlobalService.attempts==2,"stale animation result cannot trigger another paid request");
-        result(4);tick(1);tick(500);
+        result(4);tick(1);tick(4000);
         check(GlobalService.attempts==3,"confirmed failure resumes");
 
         setup(0,2);start();inventory(1);tick(5000);
         check(GlobalService.attempts==1,"inventory arriving first still waits for result");
-        result(3);tick(1);tick(500);
+        result(3);tick(1);tick(4000);
         check(GlobalService.attempts==2,"inventory before result also resumes");
         inventory(2);tick(1);
         check(!AutoUpgrade.active&&GlobalService.attempts==2,"authoritative target stops without extra paid request");
@@ -177,23 +177,73 @@ public class AutoUpgradeTest {
         check(!AutoUpgrade.active,"manual removal stops instead of reinserting gear");
     }
     static void configAndUi(){
-        setup(3,10);AutoUpgrade.policy[8]=3;AutoUpgrade.currency=1;AutoUpgrade.delayMs=1500;AutoUpgrade.saveConfig();
+        setup(3,10);AutoUpgrade.policy[8]=3;AutoUpgrade.currency=1;AutoUpgrade.delayMs=5000;AutoUpgrade.saveConfig();
         GameScreen.player.name="second";AutoUpgrade.loadConfig();
-        check(AutoUpgrade.targetLevel==8&&AutoUpgrade.policy[8]==0&&AutoUpgrade.delayMs==500,"new character defaults");
+        check(AutoUpgrade.targetLevel==8&&AutoUpgrade.delayMs==4000&&AutoUpgrade.policy[5]==1&&AutoUpgrade.policy[6]==2&&AutoUpgrade.policy[8]==0,"new character defaults");
         GameScreen.player.name="test";AutoUpgrade.loadConfig();
-        check(AutoUpgrade.targetLevel==10&&AutoUpgrade.policy[8]==3&&AutoUpgrade.currency==1&&AutoUpgrade.delayMs==1500,"profile config restored");
+        check(AutoUpgrade.targetLevel==10&&AutoUpgrade.policy[8]==3&&AutoUpgrade.currency==1&&AutoUpgrade.delayMs==5000,"profile config restored");
         AutoUpgradeMenu.show(tab);
         ((iCommand)GameCanvas.menu2.items.elementAt(1)).action.perform();
         ((iCommand)GameCanvas.menu2.items.elementAt(8)).action.perform();
         check(AutoUpgrade.targetLevel==9,"UI target +9");
         ((iCommand)GameCanvas.menu2.items.elementAt(2)).action.perform();
-        ((iCommand)GameCanvas.menu2.items.elementAt(1)).action.perform();
-        check(AutoUpgrade.delayMs==500,"UI delay 500ms");
+        InputDialog dlg = (InputDialog)GameCanvas.currentDialog;
+        dlg.tfInput.setText("2");
+        dlg.left.action.perform();
+        check(AutoUpgrade.delayMs==4000,"UI custom delay < 4s auto defaults to 4000ms");
+        ((iCommand)GameCanvas.menu2.items.elementAt(2)).action.perform();
+        dlg = (InputDialog)GameCanvas.currentDialog;
+        dlg.tfInput.setText("5");
+        dlg.left.action.perform();
+        check(AutoUpgrade.delayMs==5000,"UI custom delay 5000ms accepted");
         ((iCommand)GameCanvas.menu2.items.elementAt(4)).action.perform();
         ((iCommand)GameCanvas.menu2.items.elementAt(5)).action.perform();
         ((iCommand)GameCanvas.menu2.items.elementAt(7)).action.perform();
         ((iCommand)GameCanvas.menu2.items.elementAt(2)).action.perform();
         check(AutoUpgrade.policy[8]==2,"UI +7 -> +8 clover setting");
+        // Test apply standard policy via menu
+        AutoUpgradeMenu.show(tab);
+        ((iCommand)GameCanvas.menu2.items.elementAt(4)).action.perform();
+        ((iCommand)GameCanvas.menu2.items.elementAt(0)).action.perform();
+        check(AutoUpgrade.policy[5]==1&&AutoUpgrade.policy[6]==2&&AutoUpgrade.policy[9]==2&&AutoUpgrade.policy[10]==2&&AutoUpgrade.policy[11]==2&&AutoUpgrade.policy[13]==1&&AutoUpgrade.policy[14]==3&&AutoUpgrade.policy[15]==3,"Standard policy applied via menu");
+    }
+    static void standardProtectionAndCancel(){
+        AutoUpgrade.applyStandardPolicy();
+        check(AutoUpgrade.policy[5]==1,"policy 5 is 3 leaves");
+        check(AutoUpgrade.policy[6]==2,"policy 6 is 4 leaves");
+        check(AutoUpgrade.policy[9]==2,"policy 9 is 4 leaves");
+        check(AutoUpgrade.policy[10]==2,"policy 10 is 4 leaves");
+        check(AutoUpgrade.policy[11]==2,"policy 11 is 4 leaves");
+        check(AutoUpgrade.policy[13]==1,"policy 13 is 3 leaves");
+        check(AutoUpgrade.policy[14]==3,"policy 14 is 3 colors");
+        check(AutoUpgrade.policy[15]==3,"policy 15 is 3 colors");
+        check(AutoUpgrade.policy[4]==0&&AutoUpgrade.policy[7]==0&&AutoUpgrade.policy[8]==0&&AutoUpgrade.policy[12]==0,"other levels none");
+
+        // Missing clover stops immediately
+        setup(4,6);AutoUpgrade.applyStandardPolicy();
+        Item.VecInvetoryPlayer.removeElement(Item.getItemInventory(7,(short)31)); // remove Co 3 la
+        start();
+        check(!AutoUpgrade.active,"stops when missing clover");
+        check(AutoUpgrade.status.indexOf("Không đủ Cỏ 3 lá")>=0,"status indicates missing clover");
+
+        // Cancellation during delay
+        setup(0,5);start();
+        tick(500);check(AutoUpgrade.active,"active during delay");
+        AutoUpgrade.stop("user cancel");
+        check(!AutoUpgrade.active,"stopped immediately");
+        check(TabRebuildItem.isBeginEff==0,"no effect hanging");
+        check(TabRebuildItem.itemRe!=null&&TabRebuildItem.itemRe.Id==100,"item in forge preserved after stop");
+        // Server reply arriving after cancel does not restart effect
+        AutoUpgrade.onRebuildResult(3,"OK");
+        check(TabRebuildItem.isBeginEff==0,"effect still 0 after late result");
+        check(!AutoUpgrade.active,"remains stopped");
+
+        // Direct cancel via TabRebuildItem
+        setup(0,5);start();
+        check(AutoUpgrade.active,"running");
+        tab.commandPointer(0,0);
+        check(!AutoUpgrade.active,"stopped via forge button");
+        check(TabRebuildItem.itemRe!=null&&TabRebuildItem.itemRe.Id==100,"item in forge preserved after button stop");
     }
     static void parser() throws Exception {
         Message out=new Message(67);out.writer().writeByte(0);out.writer().writeShort(41);
@@ -215,7 +265,7 @@ public class AutoUpgradeTest {
         GameScreen.player.name="test";
     }
     public static void main(String[] args)throws Exception {
-        continuousWithoutReselect();delayedServer();wireReplies();policies();failureAndTimeout();materials();configAndUi();parser();displayPrivacy();
-        System.out.println("PASS: "+checks+" upgrade checks; per-level clovers, acknowledgements, delayed inventory, target stop, failures, config, menus");
+        continuousWithoutReselect();delayedServer();wireReplies();policies();failureAndTimeout();materials();configAndUi();standardProtectionAndCancel();parser();displayPrivacy();
+        System.out.println("PASS: "+checks+" upgrade checks; per-level clovers, acknowledgements, delayed inventory, target stop, failures, config, menus, fast delay and cancel");
     }
 }

@@ -577,11 +577,50 @@ public class GoBackTest {
         MenuUP.isReviveCancelled=false;MenuUP.isGoBackPaused=true;MenuUP.tickRevive();
         check(MenuUP.reviveState==0,"paused GoBack revived anyway");
     }
+    static void areaSignNavigation() {
+        newRun("area-sign",401,"saved");
+        setMap(401,"saved",new String[0]);
+        LoadMap.Area=0;
+        MenuUP.farmMapId=401;
+        MenuUP.farmMapName="saved";
+        MenuUP.farmArea=2;
+        MenuUP.farmX=195*24+12;
+        MenuUP.farmY=84;
+        GlobalService.changes=0;
+
+        MainObject sign = new MainObject();
+        sign.ID = 10;
+        sign.typeObject = 2;
+        sign.name = "Khu";
+        sign.nameGiaotiep = "Khu vuc";
+        sign.x = 100;
+        sign.y = 100;
+        GameScreen.Vecplayers.addElement(sign);
+
+        check(GoBackNavigator.areaSign(sign), "area sign detection failed");
+        check(GoBackNavigator.findAreaSignNpc() == sign, "findAreaSignNpc failed");
+
+        GameScreen.player.x = 12;
+        GameScreen.player.y = 12;
+        MenuUP.tick();
+
+        check(GlobalService.changes == 0, "changed area before reaching sign");
+        check(GoBackNavigator.status.indexOf("Di toi bien khu") >= 0, "status did not indicate walking to area sign");
+
+        GameScreen.player.x = 90;
+        GameScreen.player.y = 100;
+        mSystem.now += 100;
+        MenuUP.tick();
+
+        check(GlobalService.changes == 1, "did not change area when standing next to sign");
+
+        GameScreen.Vecplayers.removeElement(sign);
+    }
     public static void main(String[] args) throws Exception {
         paths();routes();runtime();noBacktracking();instantMapResume();atlas();teleport();snapshotsAndTimeouts();
         nativeReturn();
         strictMounts();portalRegressions();fiveVillages();largeMapAndRecovery();profiles();
-        stableWaypoints();deathReturn();
+        stableWaypoints();deathReturn();areaSignNavigation();
         check(MenuUP.stripAccents("  Rặng  Đá Ngầm ").equals("rang da ngam"),"name normalization");
         check(MenuUP.getMapIdByName("Fire extra")==-1,"substring destination matching");
         System.out.println("PASS: "+assertions+" checks; graph, persistence, village regression, obstacles, Lv134, teleport, area retry");

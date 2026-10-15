@@ -97,7 +97,7 @@ public final class AutoUpgradeMenu {
             // 3. Delay cường hóa
             menu.addElement(new iCommand("Delay cường hóa: " + AutoUpgrade.formatDelay(AutoUpgrade.delayMs), new IAction() {
                 public void perform() {
-                    showDelayMenu();
+                    promptCustomDelay();
                 }
             }));
 
@@ -136,61 +136,40 @@ public final class AutoUpgradeMenu {
         GameCanvas.menu2.startAt(menu, 2, "TỰ ĐỘNG CƯỜNG HÓA", false, null);
     }
 
-    private static void showDelayMenu() {
-        mVector menu = new mVector("Delay");
-        int[] presets = new int[]{200, 500, 1000, 1500, 2000, 3000};
-        String[] labels = new String[]{
-            "⚡ 0.2 giây (Siêu tốc)",
-            "0.5 giây (Nhanh)",
-            "1.0 giây (Mặc định)",
-            "1.5 giây (Vừa phải)",
-            "2.0 giây (An toàn)",
-            "3.0 giây (Chậm)"
-        };
-        for (int i = 0; i < presets.length; i++) {
-            final int ms = presets[i];
-            String check = (AutoUpgrade.delayMs == ms) ? "[] " : "";
-            menu.addElement(new iCommand(check + labels[i], new IAction() {
-                public void perform() {
-                    AutoUpgrade.delayMs = ms;
-                    AutoUpgrade.saveConfig();
-                    show(tab);
-                }
-            }));
-        }
-        menu.addElement(new iCommand("⌨ Tự nhập số giây...", new IAction() {
-            public void perform() {
-                promptCustomDelay();
-            }
-        }));
-        menu.addElement(new iCommand("Quay lại", new IAction() {
-            public void perform() {
-                show(tab);
-            }
-        }));
-        GameCanvas.menu2.startAt(menu, 2, "CÀI ĐẶT DELAY CƯỜNG HÓA", false, null);
-    }
-
     private static void promptCustomDelay() {
         final InputDialog dlg = new InputDialog();
-        dlg.setinfo("Nhập số giây delay (ví dụ: 0.5 hoặc 2):", new iCommand("Xong", new IAction() {
+        dlg.setinfo("Nhập số giây delay (tối thiểu 4s, mặc định 4s):", new iCommand("Xong", new IAction() {
             public void perform() {
                 try {
                     String txt = dlg.tfInput != null ? dlg.tfInput.getText() : "";
+                    float sec = -1.0f;
+                    try {
+                        sec = Float.parseFloat(txt.trim().replace(',', '.'));
+                    } catch (Exception ignored) {}
                     int ms = AutoUpgrade.parseDelaySeconds(txt);
-                    if (ms <= 0) {
-                        GameCanvas.addInfoCharCline("Số giây không hợp lệ!");
+                    if (ms < 4000) ms = 4000;
+                    AutoUpgrade.delayMs = ms;
+                    AutoUpgrade.saveConfig();
+                    if (sec < 4.0f) {
+                        GameCanvas.addInfoCharCline("Delay tối thiểu 4s; đã đặt về mặc định 4s.");
                     } else {
-                        AutoUpgrade.delayMs = ms;
-                        AutoUpgrade.saveConfig();
+                        GameCanvas.addInfoCharCline("Đã đổi delay cường hóa: " + AutoUpgrade.formatDelay(ms));
                     }
                 } catch (Exception e) {
-                    GameCanvas.addInfoCharCline("Lỗi nhập liệu!");
+                    AutoUpgrade.delayMs = 4000;
+                    AutoUpgrade.saveConfig();
+                    GameCanvas.addInfoCharCline("Lỗi nhập liệu; đã đặt về mặc định 4s.");
                 }
                 GameCanvas.currentDialog = null;
                 show(tab);
             }
         }), false, "DELAY CƯỜNG HÓA");
+        if (dlg.tfInput != null) {
+            String defText = (AutoUpgrade.delayMs % 1000 == 0)
+                ? String.valueOf(AutoUpgrade.delayMs / 1000)
+                : String.valueOf((float)AutoUpgrade.delayMs / 1000f);
+            dlg.tfInput.setText(defText);
+        }
         GameCanvas.currentDialog = dlg;
     }
 
@@ -217,16 +196,11 @@ public final class AutoUpgradeMenu {
 
     private static void showCloverMenu() {
         mVector menu = new mVector("Cai co");
-        menu.addElement(new iCommand("✨ Cài chuẩn (+4..7: 3 lá | +8..10: 4 lá | +11+: 3 màu)", new IAction() {
+        menu.addElement(new iCommand("✨ Cài chuẩn (+5: 3 lá | +6,9..11: 4 lá | +13: 3 lá | +14,15: 3 màu)", new IAction() {
             public void perform() {
-                for (int i = 1; i <= AutoUpgrade.MAX_LEVEL; i++) {
-                    if (i <= 3) AutoUpgrade.policy[i] = (byte)AutoUpgrade.NONE;
-                    else if (i <= 7) AutoUpgrade.policy[i] = (byte)AutoUpgrade.THREE;
-                    else if (i <= 10) AutoUpgrade.policy[i] = (byte)AutoUpgrade.FOUR;
-                    else AutoUpgrade.policy[i] = (byte)AutoUpgrade.COLOR;
-                }
+                AutoUpgrade.applyStandardPolicy();
                 AutoUpgrade.saveConfig();
-                GameCanvas.addInfoCharCline("Đã áp dụng cài cỏ chuẩn!");
+                GameCanvas.addInfoCharCline("Đã áp dụng cài cỏ/bảo hộ chuẩn (+15)!");
                 showCloverMenu();
             }
         }));
@@ -248,7 +222,7 @@ public final class AutoUpgradeMenu {
                 showCloverBatch(AutoUpgrade.FOUR);
             }
         }));
-        menu.addElement(new iCommand("Dùng Cỏ 3 màu từ cấp...", new IAction() {
+        menu.addElement(new iCommand("Dùng Đá 3 màu từ cấp...", new IAction() {
             public void perform() {
                 showCloverBatch(AutoUpgrade.COLOR);
             }
@@ -379,7 +353,10 @@ public final class AutoUpgradeMenu {
                 }
             }
             int clv = AutoUpgrade.policy[nextLvl];
-            menu.addElement(new iCommand("Cỏ thiết lập: " + AutoUpgrade.cloverName(clv), new IAction() {
+            Item clvItem = clv == AutoUpgrade.NONE ? null : AutoUpgrade.clover(clv);
+            int clvHave = clvItem != null ? clvItem.numPotion : 0;
+            String clvStatus = (clv == AutoUpgrade.NONE) ? "" : (clvHave > 0 ? " (Có: " + clvHave + " - ĐỦ)" : " (Có: 0 - THIẾU)");
+            menu.addElement(new iCommand("Bảo hộ thiết lập: " + AutoUpgrade.cloverName(clv) + clvStatus, new IAction() {
                 public void perform() {
                     showCloverChoices(nextLvl);
                 }

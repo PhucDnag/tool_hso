@@ -247,7 +247,9 @@ extends MainTabNew {
     public void commandPointer(int n, int n2) {
         if (n == 90) { GameObjects.AutoUpgradeMenu.show(this); return; }
         if (GameObjects.AutoUpgrade.active && (n == 0 || n == 9 || n == 2)) {
-            GameObjects.AutoUpgradeMenu.show(this); return;
+            GameObjects.AutoUpgrade.stop("Đã dừng theo yêu cầu.");
+            this.restoreCommands();
+            return;
         }
         switch (n) {
             case -1: {
@@ -550,6 +552,9 @@ extends MainTabNew {
     }
 
     public void backTab() {
+        if (GameObjects.AutoUpgrade.active) {
+            GameObjects.AutoUpgrade.stop("Đã dừng (đóng tab).");
+        }
         if (MainTabNew.longwidth == 0) {
             isShow = false;
         }
@@ -570,8 +575,10 @@ extends MainTabNew {
         } else {
             this.paintRect(mGraphics2);
         }
-        mGraphics2.drawImage(this.imgStarRebuild, this.xBegin + MainTabNew.wblack / 2 - 54, this.yBegin + MainTabNew.hblack / 2 - 52, 0, false);
-        mGraphics2.drawRegion(this.imgStarRebuild, 0, 0, 54, 105, 2, this.xBegin + MainTabNew.wblack / 2, this.yBegin + MainTabNew.hblack / 2 - 52, 0, false);
+        if (this.imgStarRebuild != null) {
+            mGraphics2.drawImage(this.imgStarRebuild, this.xBegin + MainTabNew.wblack / 2 - 54, this.yBegin + MainTabNew.hblack / 2 - 52, 0, false);
+            mGraphics2.drawRegion(this.imgStarRebuild, 0, 0, 54, 105, 2, this.xBegin + MainTabNew.wblack / 2, this.yBegin + MainTabNew.hblack / 2 - 52, 0, false);
+        }
         if (this.typeRebuild == TYPE_ANY) {
             this.paintAny(mGraphics2);
         } else if (this.typeRebuild == TYPE_DUC_LO) {
@@ -943,6 +950,9 @@ extends MainTabNew {
     }
 
     public void paintRebuild(mGraphics mGraphics2) {
+        boolean hasData = TabRebuildItem.dataRebuild != null && TabRebuildItem.itemRe != null
+            && TabRebuildItem.itemRe.tier >= 0 && TabRebuildItem.itemRe.tier < TabRebuildItem.dataRebuild.length
+            && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier] != null;
         for (int i = 0; i < this.posMaterial.length; ++i) {
             if (isBeginEff != 0 && i != 5) continue;
             if (GameCanvas.lowGraphic) {
@@ -966,7 +976,7 @@ extends MainTabNew {
                 } else if (i < 5) {
                     mainItem = Item.getMaterial(idMaterial[i]);
                     if (mainItem != null) {
-                        if (mainItem.typeMaterial == 11 && isLucky || i < 4 && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue[i] > 0) {
+                        if (mainItem.typeMaterial == 11 && isLucky || (hasData && i < 4 && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue != null && i < TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue.length && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue[i] > 0)) {
                             if (mainItem.typeMaterial == 11 && isLucky && itemDaMayMan != null) {
                                 itemDaMayMan.paintItem_notnum(mGraphics2, this.posMaterial[i][0], this.posMaterial[i][1], 21, 0, 0);
                             } else {
@@ -981,7 +991,8 @@ extends MainTabNew {
                         itemRe.paintItem(mGraphics2, this.posMaterial[i][0], this.posMaterial[i][1], 21, 1, 0);
                     }
                     if (isBeginEff == 0) {
-                        mFont.tahoma_7_white.drawString(mGraphics2, "Lv " + TabRebuildItem.itemRe.tier, this.posMaterial[i][0], this.posMaterial[i][1] - 22, 2, false);
+                        String lvStr = TabRebuildItem.itemRe.tier >= 15 ? ("Lv " + TabRebuildItem.itemRe.tier + " (MAX)") : ("Lv " + TabRebuildItem.itemRe.tier);
+                        mFont.tahoma_7_white.drawString(mGraphics2, lvStr, this.posMaterial[i][0], this.posMaterial[i][1] - 22, 2, false);
                     }
                     if (GameObjects.AutoUpgrade.active) {
                         mFont.tahoma_7_yellow.drawString(mGraphics2, "Auto: +" + TabRebuildItem.itemRe.tier + " -> +" + GameObjects.AutoUpgrade.runTarget + " (" + GameObjects.AutoUpgrade.attempts + ")", this.xBegin + MainTabNew.wblack / 2, this.yBegin + 8, 2, false);
@@ -991,7 +1002,7 @@ extends MainTabNew {
             }
             mGraphics2.drawImage(AvMain.imgHotKey, this.posMaterial[i][0], this.posMaterial[i][1], 3, false);
             if (itemRe == null) continue;
-            if (i < 4 && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue[i] > numMaterialInven[i]) {
+            if (hasData && i < 4 && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue != null && i < TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue.length && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue[i] > numMaterialInven[i]) {
                 mGraphics2.drawImage(AvMain.imgHotKey2, this.posMaterial[i][0], this.posMaterial[i][1], 3, false);
                 continue;
             }
@@ -1198,15 +1209,20 @@ extends MainTabNew {
             if (TabRebuildItem.itemRe.itemName != null) {
                 MainTabNew.paintNameItem(mGraphics2, n + MainTabNew.longwidth / 2, n2 - MainTabNew.wOneItem / 4, MainTabNew.longwidth, TabRebuildItem.itemRe.itemName, TabRebuildItem.itemRe.colorNameItem);
             }
-            if (TabRebuildItem.itemRe.tier >= 15) {
-                return;
-            }
             n2 += MainTabNew.wOneItem - GameCanvas.hText + GameCanvas.hText / 4;
             n += 4;
+            if (TabRebuildItem.itemRe.tier >= 15) {
+                mFont.tahoma_7b_blue.drawString(mGraphics2, "(Đã đạt cấp tối đa)", n, n2, 0, false);
+                return;
+            }
         } else {
             this.paintFormList(mGraphics2, n, n2, this.winfo, 150, TabRebuildItem.itemRe.itemName);
             n2 += GameCanvas.hCommand + 2;
             n += 4;
+            if (TabRebuildItem.itemRe.tier >= 15) {
+                mFont.tahoma_7b_blue.drawString(mGraphics2, "(Đã đạt cấp tối đa)", n, n2, 0, false);
+                return;
+            }
         }
         if (this.isTabHopNguyenLieu) {
             if (TabRebuildItem.itemRe.itemClone == null) {
@@ -1225,27 +1241,34 @@ extends MainTabNew {
             mFont.tahoma_7_white.drawString(mGraphics2, TabRebuildItem.itemRe.infoHop[1], n + 4, n2 += n3 - 2, 0, false);
             return;
         }
-        if (TabRebuildItem.itemRe.tier < 15) {
-            mFont.tahoma_7b_blue.drawString(mGraphics2, "+" + TabRebuildItem.itemRe.tier + " > +" + (TabRebuildItem.itemRe.tier + 1), n, n2, 0, false);
+        boolean hasData = TabRebuildItem.dataRebuild != null
+            && TabRebuildItem.itemRe.tier >= 0 && TabRebuildItem.itemRe.tier < TabRebuildItem.dataRebuild.length
+            && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier] != null;
+        if (!hasData) {
+            mFont.tahoma_7b_blue.drawString(mGraphics2, "(Đã đạt cấp tối đa)", n, n2, 0, false);
+            return;
         }
+        mFont.tahoma_7b_blue.drawString(mGraphics2, "+" + TabRebuildItem.itemRe.tier + " > +" + (TabRebuildItem.itemRe.tier + 1), n, n2, 0, false);
         mFont.tahoma_7b_white.drawString(mGraphics2, T.nguyenlieu, n, n2 += n3, 0, false);
         n2 += n3;
-        for (int i = 0; i < TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue.length; ++i) {
-            MainItem mainItem;
-            mFont mFont2 = mFont.tahoma_7_white;
-            if (TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue[i] > numMaterialInven[i]) {
-                mFont2 = mFont.tahoma_7_red;
+        if (TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue != null) {
+            for (int i = 0; i < TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue.length; ++i) {
+                MainItem mainItem;
+                mFont mFont2 = mFont.tahoma_7_white;
+                if (TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue[i] > numMaterialInven[i]) {
+                    mFont2 = mFont.tahoma_7_red;
+                }
+                if ((mainItem = Item.getMaterial(idMaterial[i])) != null) {
+                    TabRebuildItem.mNameMaterial[i] = mainItem.itemName;
+                } else {
+                    Item.put_Material(idMaterial[i]);
+                }
+                if (mNameMaterial[i] != null) {
+                    mFont2.drawString(mGraphics2, mNameMaterial[i], n + 4, n2, 0, false);
+                }
+                mFont2.drawString(mGraphics2, TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue[i] + "/" + numMaterialInven[i], n + this.winfo / 2 + 10, n2, 0, false);
+                n2 += n3;
             }
-            if ((mainItem = Item.getMaterial(idMaterial[i])) != null) {
-                TabRebuildItem.mNameMaterial[i] = mainItem.itemName;
-            } else {
-                Item.put_Material(idMaterial[i]);
-            }
-            if (mNameMaterial[i] != null) {
-                mFont2.drawString(mGraphics2, mNameMaterial[i], n + 4, n2, 0, false);
-            }
-            mFont2.drawString(mGraphics2, TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue[i] + "/" + numMaterialInven[i], n + this.winfo / 2 + 10, n2, 0, false);
-            n2 += n3;
         }
         mFont.tahoma_7b_white.drawString(mGraphics2, T.tilemayman, n, n2, 0, false);
         mFont.tahoma_7_white.drawString(mGraphics2, tilemayman, n + 4, n2 += n3, 0, false);
@@ -1254,6 +1277,10 @@ extends MainTabNew {
     }
 
     public void paintPrice(mGraphics mGraphics2, int n, int n2) {
+        boolean hasData = TabRebuildItem.dataRebuild != null && TabRebuildItem.itemRe != null
+            && TabRebuildItem.itemRe.tier >= 0 && TabRebuildItem.itemRe.tier < TabRebuildItem.dataRebuild.length
+            && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier] != null;
+        if (!hasData) return;
         if (TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].priceCoin == 0) {
             mFont.tahoma_7_white.drawString(mGraphics2, TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].priceGold + " " + T.gem, n + 4, n2, 0, false);
             return;
@@ -1306,7 +1333,7 @@ extends MainTabNew {
                 this.cmdHoiDap.caption = T.hopThanh;
                 this.cmdHoiDap.indexMenu = (byte)7;
             } else {
-                this.cmdHoiDap.caption = T.dapdo;
+                this.cmdHoiDap.caption = GameObjects.AutoUpgrade.active ? "Dừng Auto" : T.dapdo;
                 this.cmdHoiDap.indexMenu = 0;
             }
         } else if (this.typeRebuild == TYPE_REPLACE_PLUS) {
@@ -1712,9 +1739,14 @@ extends MainTabNew {
             }
             if (itemRe != null) {
                 vecEffRe.removeAllElements();
-                for (int i = 0; i < TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue.length; ++i) {
-                    if (TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue[i] <= 0) continue;
-                    TabRebuildItem.addEffectEndRebuild(31, this.posMaterial[i][0], this.posMaterial[i][1], this.posMaterial[5][0], this.posMaterial[5][1], 1);
+                boolean hasData = TabRebuildItem.dataRebuild != null && TabRebuildItem.itemRe != null
+                    && TabRebuildItem.itemRe.tier >= 0 && TabRebuildItem.itemRe.tier < TabRebuildItem.dataRebuild.length
+                    && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier] != null;
+                if (hasData && TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue != null) {
+                    for (int i = 0; i < TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue.length; ++i) {
+                        if (TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].mValue[i] <= 0) continue;
+                        TabRebuildItem.addEffectEndRebuild(31, this.posMaterial[i][0], this.posMaterial[i][1], this.posMaterial[5][0], this.posMaterial[5][1], 1);
+                    }
                 }
                 if (isLucky) {
                     TabRebuildItem.addEffectEndRebuild(31, this.posMaterial[4][0], this.posMaterial[4][1], this.posMaterial[5][0], this.posMaterial[5][1], 1);
@@ -1762,8 +1794,8 @@ extends MainTabNew {
                 ++this.time;
             }
             MainItem mainItem = (MainItem)Item.getItemInventory(TabRebuildItem.itemRe.ItemCatagory, (short)TabRebuildItem.itemRe.Id);
-            if (!this.isTabHopNguyenLieu) {
-                itemRe = mainItem != null ? MainItem.MainItem_Item(mainItem.Id, mainItem.itemNameExcludeLv, mainItem.imageId, mainItem.tier, mainItem.colorNameItem, mainItem.classcharItem, mainItem.ItemCatagory, mainItem.mInfo, mainItem.type_Only_Item, false, mainItem.IdTem, mainItem.priceItem, (short)mainItem.LvItem, mainItem.canSell, mainItem.canTrade, mainItem.timeUse, (byte)0, (byte)0) : null;
+            if (!this.isTabHopNguyenLieu && mainItem != null) {
+                itemRe = MainItem.MainItem_Item(mainItem.Id, mainItem.itemNameExcludeLv, mainItem.imageId, mainItem.tier, mainItem.colorNameItem, mainItem.classcharItem, mainItem.ItemCatagory, mainItem.mInfo, mainItem.type_Only_Item, false, mainItem.IdTem, mainItem.priceItem, (short)mainItem.LvItem, mainItem.canSell, mainItem.canTrade, mainItem.timeUse, (byte)0, (byte)0);
             }
             tilemayman = tilemaymanafter;
             if (vecEffRe.size() == 0 || this.time >= 100L) {
@@ -1780,9 +1812,6 @@ extends MainTabNew {
         } else if (isBeginEff == 6) {
             if (!GameObjects.AutoUpgrade.active) {
                 isDapnhanh = false;
-            }
-            if (TabRebuildItem.itemRe.tier == 15) {
-                itemRe = null;
             }
             if (this.isTabHopNguyenLieu && itemRe != null) {
                 itemRe = null;
@@ -1801,7 +1830,7 @@ extends MainTabNew {
         if (!GameCanvas.isTouch) {
             this.left = this.cmdView;
             this.center = this.cmdHoiDap;
-            MainTabNew.Focus = 0;
+            MainTabNew.Focus = 1;
         } else {
             if (this.vecListCmd != null) {
                 this.vecListCmd.removeAllElements();

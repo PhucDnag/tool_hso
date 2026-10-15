@@ -3111,7 +3111,6 @@ extends AvMain {
     public void Login_Fail(Message message) {
         try {
             String string = message.reader().readUTF();
-            GameCanvas.start_Ok_Dialog(string);
             byte by = 0;
             try {
                 by = message.reader().readByte();
@@ -3125,6 +3124,10 @@ extends AvMain {
             if (by == 1) {
                 GlobalLogicHandler.isMelogin = true;
             }
+            if (GameObjects.MenuUP.onLoginFail(string)) {
+                return;
+            }
+            GameCanvas.start_Ok_Dialog(string);
         }
         catch (Exception exception) {
             // empty catch block

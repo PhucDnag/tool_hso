@@ -28,13 +28,18 @@ netcommand.global.GlobalService.gI().Rebuild_Item(op,id,cat);
 'GameObjects/MenuUP.java': 'package GameObjects; public class MenuUP {public static boolean isGoBackActive;'+strip+'}',
 'GameObjects/AutoSellManager.java': 'package GameObjects;public class AutoSellManager {public static boolean isReturningToSell;public static int getQueueCount(){return 0;}}',
 'GameObjects/Item.java': """package GameObjects; public class Item {
-public int Id,ItemCatagory,typeMaterial,numPotion,tier;public String itemName="",itemNameExcludeLv="";
+public int Id,ItemCatagory,typeMaterial,numPotion;public byte tier=0,canSell=0,canTrade=0;public String itemName="",itemNameExcludeLv="";
+public int imageId,colorNameItem,classcharItem,type_Only_Item,LvItem;public short IdTem;public long priceItem;public MainInfoItem[] mInfo;
 public static CLib.mVector VecInvetoryPlayer=new CLib.mVector();
 public static Item getItemInventory(int cat,short id){for(int i=0;i<VecInvetoryPlayer.size();i++){
 Item a=(Item)VecInvetoryPlayer.elementAt(i);if(a.Id==id&&a.ItemCatagory==cat)return a;}return null;}
 public static MainItem getMaterial(int id){return null;}
 public static MainItem getMaterial(short id){return null;}}""",
-'GameObjects/MainItem.java': 'package GameObjects;public class MainItem extends Item {}',
+'GameObjects/MainInfoItem.java': 'package GameObjects;public class MainInfoItem {}',
+'GameObjects/MainItem.java': """package GameObjects;public class MainItem extends Item {
+public static MainItem MainItem_Item(int a, String b, int c, byte d, int e, int f, int g, MainInfoItem[] h, int i, boolean j, short k, long l, short m, byte n, byte o, int p, byte q, byte r){
+MainItem it=new MainItem();it.Id=a;it.itemNameExcludeLv=b;it.imageId=c;it.tier=d;return it;
+}}""",
 'GameObjects/Player.java': 'package GameObjects;public class Player {public int hp=100,Action;public long coin=100000,gold=1000;public String name="test";}',
 'GameScreen/GameScreen.java': 'package GameScreen;public class GameScreen {public static GameObjects.Player player=new GameObjects.Player();}',
 'GameScreen/LoginScreen.java': 'package GameScreen;public class LoginScreen {public static String ip="server";}',
@@ -54,10 +59,15 @@ public static String contentShow="";
 public static CLib.mVector vecEffRe = new CLib.mVector();
 public static DataRebuildItem[] dataRebuild;public static short[] idMaterial;
 public boolean plain=true;public boolean isEquipmentRebuild(){return plain;}
-public void restoreCommands(){}}""",
+public long time=0L;
+public void setPaintInfo(){}
+public void restoreCommands(){}
+public void commandPointer(int a,int b){
+    if(a==0||a==9||a==2){try{Class.forName("GameObjects.AutoUpgrade").getMethod("stop",new Class[]{String.class}).invoke(null,new Object[]{"stop"});}catch(Exception e){}}
+}}""",
 'InterfaceComponents/iCommand.java': 'package InterfaceComponents;public class iCommand {public String caption;public IAction action;public iCommand(String s,IAction a){caption=s;action=a;}}',
-'InterfaceComponents/InputDialog.java': 'package InterfaceComponents; public class InputDialog { public CLib.TField tfInput=new CLib.TField(); public void setinfo(String s, iCommand c, boolean b, String t){} }',
-'CLib/TField.java': 'package CLib; public class TField { public String getText(){return "1.0";} }',
+'InterfaceComponents/InputDialog.java': 'package InterfaceComponents; public class InputDialog { public CLib.TField tfInput=new CLib.TField(); public iCommand left; public void setinfo(String s, iCommand c, boolean b, String t){left=c;} }',
+'CLib/TField.java': 'package CLib; public class TField { public String text="1.0"; public String getText(){return text;} public void setText(String s){text=s;} }',
 'netcommand/global/GlobalService.java': """package netcommand.global;public class GlobalService {
 static GlobalService s=new GlobalService();public static int packets,attempts,op,id,cat;
 public static GlobalService gI(){return s;}public void Rebuild_Item(byte o,short i,byte c){

@@ -1676,6 +1676,7 @@ public class PaintInfoGameScreen {
                 return;
             }
             case -2: {
+                GameScreen.gI().doArea();
                 break;
             }
             case -1: {

@@ -12,7 +12,7 @@ stubs['InterfaceComponents/iCommand.java']=stubs['InterfaceComponents/iCommand.j
 stubs['GameObjects/MenuUP.java']='''package GameObjects;public class MenuUP {
 public static boolean isGoBackActive,isAutoAttack=true,isGoBackEnabled=true;public static int farmMapId=-1,farmArea=-1;
 public static void showMenu(){}'''+strip+'}'
-stubs['GameObjects/AutoUpgrade.java']='package GameObjects;public class AutoUpgrade {public static boolean active;}'
+stubs['GameObjects/AutoUpgrade.java']='package GameObjects;public class AutoUpgrade {public static boolean active;public static void stop(String s){active=false;}}'
 stubs['GameScreen/LoadMapScreen.java']='package GameScreen;public class LoadMapScreen {public static boolean isNextMap=true;public int idMap=7;}'
 stubs['Thread_More/LoadMap.java']='package Thread_More;public class LoadMap {public static int Area=0,MaxArea=10;}'
 stubs['GameScreen/GameScreen.java']='package GameScreen;public class GameScreen {public static boolean isMapLang;public static GameObjects.Player player=new GameObjects.Player();}'
