@@ -1,13 +1,11 @@
 package GameObjects;
 
 import CLib.mVector;
-import InterfaceComponents.DataRebuildItem;
 import InterfaceComponents.InputDialog;
 import InterfaceComponents.TabRebuildItem;
 import InterfaceComponents.iCommand;
 import InterfaceComponents.IAction;
 import Main.GameCanvas;
-import GameScreen.GameScreen;
 
 public final class AutoUpgradeMenu {
     private static TabRebuildItem tab;
@@ -114,13 +112,6 @@ public final class AutoUpgradeMenu {
             menu.addElement(new iCommand("Cài đặt Cỏ may mắn...", new IAction() {
                 public void perform() {
                     showCloverMenu();
-                }
-            }));
-
-            // 6. Xem thông tin nguyên liệu
-            menu.addElement(new iCommand("Xem nguyên liệu cấp +" + (curTier + 1) + "...", new IAction() {
-                public void perform() {
-                    showMaterialInfo(finalCurTier);
                 }
             }));
 
@@ -302,71 +293,4 @@ public final class AutoUpgradeMenu {
         GameCanvas.menu2.startAt(menu, 2, "CƯỜNG HÓA LÊN +" + level, false, null);
     }
 
-    private static void showMaterialInfo(int curTier) {
-        mVector menu = new mVector("Nguyen lieu");
-        if (TabRebuildItem.itemRe == null) {
-            menu.addElement(new iCommand("Chưa có vật phẩm trong ô cường hóa!", new IAction() {
-                public void perform() {
-                    show(tab);
-                }
-            }));
-        } else if (curTier >= AutoUpgrade.MAX_LEVEL) {
-            menu.addElement(new iCommand("Trang bị đã đạt cấp tối đa (+15)!", new IAction() {
-                public void perform() {
-                    show(tab);
-                }
-            }));
-        } else if (TabRebuildItem.dataRebuild != null && curTier < TabRebuildItem.dataRebuild.length) {
-            DataRebuildItem data = TabRebuildItem.dataRebuild[curTier];
-            final int nextLvl = curTier + 1;
-            menu.addElement(new iCommand("Trang bị: " + TabRebuildItem.itemRe.itemName + " +" + curTier + " -> +" + nextLvl, new IAction() {
-                public void perform() {
-                    show(tab);
-                }
-            }));
-            long myCoin = GameScreen.player != null ? GameScreen.player.coin : 0;
-            long myGold = GameScreen.player != null ? GameScreen.player.gold : 0;
-            menu.addElement(new iCommand("Chi phí Xu: " + data.priceCoin + " (Có: " + myCoin + (myCoin >= data.priceCoin ? " - ĐỦ)" : " - THIẾU)"), new IAction() {
-                public void perform() {
-                    show(tab);
-                }
-            }));
-            menu.addElement(new iCommand("Chi phí Ngọc: " + data.priceGold + " (Có: " + myGold + (myGold >= data.priceGold ? " - ĐỦ)" : " - THIẾU)"), new IAction() {
-                public void perform() {
-                    show(tab);
-                }
-            }));
-            if (data.mValue != null && TabRebuildItem.idMaterial != null) {
-                for (int i = 0; i < data.mValue.length && i < TabRebuildItem.idMaterial.length; i++) {
-                    int need = data.mValue[i];
-                    if (need <= 0) continue;
-                    Item mat = Item.getItemInventory(7, TabRebuildItem.idMaterial[i]);
-                    int have = mat != null ? mat.numPotion : 0;
-                    MainItem matInfo = Item.getMaterial(TabRebuildItem.idMaterial[i]);
-                    String matName = matInfo != null ? matInfo.itemName : ("Đá loại " + (i + 1));
-                    String st = (have >= need) ? " [ĐỦ]" : " [THIẾU]";
-                    menu.addElement(new iCommand(matName + ": " + have + "/" + need + st, new IAction() {
-                        public void perform() {
-                            show(tab);
-                        }
-                    }));
-                }
-            }
-            int clv = AutoUpgrade.policy[nextLvl];
-            Item clvItem = clv == AutoUpgrade.NONE ? null : AutoUpgrade.clover(clv);
-            int clvHave = clvItem != null ? clvItem.numPotion : 0;
-            String clvStatus = (clv == AutoUpgrade.NONE) ? "" : (clvHave > 0 ? " (Có: " + clvHave + " - ĐỦ)" : " (Có: 0 - THIẾU)");
-            menu.addElement(new iCommand("Bảo hộ thiết lập: " + AutoUpgrade.cloverName(clv) + clvStatus, new IAction() {
-                public void perform() {
-                    showCloverChoices(nextLvl);
-                }
-            }));
-        }
-        menu.addElement(new iCommand("Quay lại", new IAction() {
-            public void perform() {
-                show(tab);
-            }
-        }));
-        GameCanvas.menu2.startAt(menu, 2, "NGUYÊN LIỆU CHO CẤP TIẾP THEO", false, null);
-    }
 }

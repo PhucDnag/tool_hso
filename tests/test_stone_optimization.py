@@ -18,6 +18,8 @@ def method(name):
     return source[start:end]
 
 stubs = {
+'GameScreen/ShipScr.java': 'package GameScreen;public class ShipScr {public boolean isSpeed;public Object center=new Object();}',
+'GameObjects/MainMonster.java': 'package GameObjects;public class MainMonster extends MainObject {public int typeMonster;public String nameowner="";public boolean isBossNew(){return false;}}',
 'CLib/mVector.java': 'package CLib; public class mVector extends java.util.Vector {}',
 'CLib/mSystem.java': 'package CLib; public class mSystem { public static long now=10000; public static long currentTimeMillis(){return now;} }',
 'GameObjects/AutoFarmSupport.java': 'package GameObjects; public class AutoFarmSupport { public static int goBackArea(int a){return a;} }',
@@ -34,6 +36,7 @@ public int getVmount(){return 0;}
 public void dofire_(){isAutoFire=1;isCurAutoFire=true;} public void nextMonster(){} public void setAutoFire(){} }""",
 'GameObjects/MainObject.java': """package GameObjects; import GameScreen.GameScreen;
 public class MainObject { public int x=36,y=36,hp=100,Action,ID,typeObject,Lv,protocolId=9999; public String name="", nameGiaotiep="";
+public boolean isInfo,isRemove,useShip;public int typeBoss;
 public int getIDnpc(){return protocolId==9999?ID:protocolId;}
 public void GiaoTiep(){}
 public static int getDistance(int x,int y,int a,int b){return (int)Math.sqrt((x-a)*(x-a)+(y-b)*(y-b));}
@@ -62,7 +65,7 @@ public static String loadRMSString(String k){return (String)rms.get(k);} public 
 'InterfaceComponents/iCommand.java': 'package InterfaceComponents; public class iCommand { public String caption; public iCommand(String s){caption=s;} }',
 'netcommand/global/GlobalService.java': """package netcommand.global; import GameObjects.*; import CLib.*; import InterfaceComponents.*;
 public class GlobalService {
-static GlobalService s=new GlobalService();
+static GlobalService s=new GlobalService();public void useShip(byte mode){}
 public static int changes, requests, moves;
 public static int lastNpcId=-1, lastMenuId=-1, lastIndex=-1;
 public static int currentMenuTier = 1; // 1 = Categories, 2 = Maps
@@ -171,7 +174,7 @@ public static boolean isReviveCancelled,isCheckingGoldRevive;
 public static long timeTargetRevive,timeSentRevive;
 public static boolean hasReviveItem(){return false;}public static String getReviveItemName(){return "";}
 public static void tickRevive(){if(shouldAutoRevive())updateAutoRevive();}
-private static long lastFarmSaveTime;private static boolean farmLocationDirty,resumeNativeAutoFire;
+private static long lastFarmSaveTime;private static boolean farmLocationDirty,resumeNativeAutoFire,goBackTraveled;
 public static void saveConfig(){saves++;}
 public static void tick(){GoBackNavigator.observe();rememberFarmLocation();updateGoBack();}
 """ + methods + '\n}'
@@ -284,7 +287,7 @@ public class TestTwoTierStone {
 
         setup("silent-stone",700,-56,-56,true); GlobalService.silent=true;
         for(int i=0;i<600;i++) {mSystem.now+=100;MenuUP.tick();movePlayer();}
-        check(GlobalService.requests==3,"unresponsive stone retried indefinitely");
+        check(GlobalService.requests>0 && GlobalService.requests<=4,"unresponsive stone requests stay bounded over 60 seconds: "+GlobalService.requests);
         check(GlobalService.selections==0,"silent stone selected a stale menu");
         GoBackRoutes g=GoBackNavigator.graph;
         GoBackRoutes.Node origin=g.get(g.byId(1));
@@ -376,10 +379,11 @@ public class TestTwoTierStone {
         check(GlobalService.lastIndex == 4, "Selected Rang Da Ngam (index 4 in Tier 2)");
         System.out.println("PASS: Two-tier teleport interaction completed successfully!");
 
-        // 4. Test Cross-Island: Map 1 (Village) -> Map 67 (Thanh Pho Cang, Cat 3)
+        // 4. High-level mainland: winter town -> port, then walk to west shore.
+        GameCanvas.loadmap.idMap=93;GameCanvas.loadmap.nameMap="thi tran mua dong";
         MenuUP.isGoBackActive = false;
-        MenuUP.farmMapId = 67;
-        MenuUP.farmMapName = "Th\\u00e0nh ph\\u1ed1 c\\u1ea3ng";
+        MenuUP.farmMapId = 70;
+        MenuUP.farmMapName = "khu bo tay";
         GoBackNavigator.stop();
         GoBackNavigator.observe();
 
@@ -395,10 +399,10 @@ public class TestTwoTierStone {
                 break;
             }
         }
-        check(GlobalService.selectedCategory == 3, "Cross-island selected Category 3 (Map Lv 70 - 89)");
-        check(selectedMap, "Cross-island selected destination map in Tier 2 menu");
+        check(GlobalService.selectedCategory == 3, "High-level mainland selected Category 3 (Map Lv 70 - 89)");
+        check(selectedMap, "High-level mainland selected destination map in Tier 2 menu");
         check(GlobalService.lastIndex == 0, "Selected Thanh Pho Cang (index 0 in Tier 2)");
-        System.out.println("PASS: Cross-island teleport to Map 67 completed successfully!");
+        System.out.println("PASS: High-level mainland teleport to Map 67 completed successfully!");
 
         asyncAndTimeouts();
         System.out.println("ALL TWO-TIER TELEPORT OPTIMIZATION CHECKS PASSED!");

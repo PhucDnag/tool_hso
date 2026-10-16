@@ -9,19 +9,22 @@ import Model.CRes;
 import netcommand.global.GlobalService;
 
 public class AutoSellManager {
+    public static boolean isApproachingShop;
     public static boolean isAutoSellEnabled = true;
     public static boolean isSellWhite = true;      // Phẩm chất 0: Đồ trắng
-    public static boolean isSellGreen = true;      // Phẩm chất 1: Đồ xanh lá
-    public static boolean isSellBlue = false;      // Phẩm chất 2: Đồ xanh dương
-    public static boolean isSellYellow = false;    // Phẩm chất 3: Đồ vàng
-    public static boolean isSellPurple = false;    // Phẩm chất 4: Đồ tím
-    public static boolean isSellOrange = false;    // Phẩm chất 5: Đồ cam
+    public static boolean isSellGreen = false;     // Legacy setting, excluded from selling
+    public static boolean isSellBlue = false;      // Phẩm chất 1: Đồ xanh dương
+    public static boolean isSellYellow = false;    // Phẩm chất 2: Đồ vàng
+    public static boolean isSellPurple = false;    // Phẩm chất 3: Đồ tím
+    public static boolean isSellOrange = false;    // Phẩm chất 4: Đồ cam
     public static boolean isSellLocked = false;    // Bán đồ đã khóa (mặc định TẮT)
     public static boolean isSellUpgraded = false;  // Bán đồ đã cường hóa / cộng (mặc định TẮT)
-    public static long delaySellMs = 1000L;        // Delay bán mỗi món (mặc định 1000ms = 1s, tối thiểu 1s)
+    public static long delaySellMs = 2000L;        // Delay bán mỗi món (mặc định 1000ms = 1s, tối thiểu 1s)
     public static int minEmptySlots = 2;           // Số ô trống hành trang để tự động về làng bán đồ (0 = TẮT, 1, 2, 3, 4, 5, 7, 10)
-    public static int returnMethod = 0;            // 0: Tự thoát vào lại (Relog) - MẶC ĐỊNH; 1: Đi bộ GoBack
+    public static int returnMethod = 0;            // 0: Đi bộ + đá dịch chuyển; 1: Bùa về làng
     public static boolean isReturningToSell = false; // Cờ đang trong tiến trình về làng bán đồ
+    private static int sellVillage=-1;
+    private static long recallDeadline;
     private static long lastDeleteSentTime = 0L;   // Thời điểm gửi lệnh delete_Item gần nhất
 
     public static final long[] DELAY_STEPS = new long[]{1000L, 1200L, 1500L, 2000L, 2500L, 3000L};
@@ -85,17 +88,7 @@ public class AutoSellManager {
             if (sUp != null && sUp.trim().length() > 0) {
                 isSellUpgraded = sUp.trim().equals("1");
             }
-            String sDel = CRes.loadRMSString("hso_up_sell_delay");
-            if (sDel != null && sDel.trim().length() > 0) {
-                try {
-                    delaySellMs = Long.parseLong(sDel.trim());
-                } catch (Exception ex) {
-                    // empty catch block
-                }
-            }
-            if (delaySellMs < 1000L) {
-                delaySellMs = 1000L; // Mặc định tối thiểu 1s
-            }
+            delaySellMs = 2000L;
             String sSlots = CRes.loadRMSString("hso_up_sell_min_slots");
             if (sSlots != null && sSlots.trim().length() > 0) {
                 try {
@@ -176,21 +169,10 @@ public class AutoSellManager {
         if (item.colorNameItem == 0 && isSellWhite) {
             return true;
         }
-        if (item.colorNameItem == 1 && isSellGreen) {
-            return true;
-        }
-        if (item.colorNameItem == 2 && isSellBlue) {
-            return true;
-        }
-        if (item.colorNameItem == 3 && isSellYellow) {
-            return true;
-        }
-        if (item.colorNameItem == 4 && isSellPurple) {
-            return true;
-        }
-        if (item.colorNameItem == 5 && isSellOrange) {
-            return true;
-        }
+        if (item.colorNameItem == 1 && isSellBlue) return true;
+        if (item.colorNameItem == 2 && isSellYellow) return true;
+        if (item.colorNameItem == 3 && isSellPurple) return true;
+        if (item.colorNameItem == 4 && isSellOrange) return true;
         return false;
     }
 
@@ -352,30 +334,17 @@ public class AutoSellManager {
      * Dẫn nhân vật di chuyển tới đứng cạnh NPC (cách khoảng 28px)
      */
     public static void moveToNpc(MainObject npc) {
-        if (npc == null || GameScreen.player == null) return;
-        Player p = GameScreen.player;
-        int targetX = p.x < npc.x ? (npc.x - 28) : (npc.x + 28);
-        int targetY = npc.y;
-
-        int distToTarget = MainObject.getDistance(p.x, p.y, targetX, targetY);
-        if (distToTarget <= 10) {
-            stopPlayerMove();
-            return;
-        }
-
-        p.toX = targetX;
-        p.toY = targetY;
-        p.xStopMove = targetX;
-        p.yStopMove = targetY;
-        p.countAutoMove = 1;
-        p.posTransRoad = new short[]{0};
-        p.move_to_XY();
+        isApproachingShop=true;
+        Player.isAutoFire=(byte)-1;Player.isCurAutoFire=false;
+        GameScreen.ObjFocus=null;
+        GoBackNavigator.approachNpc(npc);
     }
 
     /**
      * Dừng mọi di chuyển của nhân vật
      */
     public static void stopPlayerMove() {
+        GoBackNavigator.stopMovement();
         Player p = GameScreen.player;
         if (p == null) return;
         p.posTransRoad = null;
@@ -391,8 +360,17 @@ public class AutoSellManager {
     /**
      * Tìm map làng gần nhất từ bản đồ thế giới
      */
+    public static Item findRecallItem(){
+        if(Item.VecInvetoryPlayer==null)return null;
+        for(int i=0;i<Item.VecInvetoryPlayer.size();i++){
+            Item item=(Item)Item.VecInvetoryPlayer.elementAt(i);
+            if(item.ItemCatagory==4 && item.numPotion>0 && "bua ve lang".equals(MenuUP.stripAccents(item.itemName)))return item;
+        }
+        return null;
+    }
+
     public static int findNearestVillageMapId() {
-        int[] villages = new int[]{1, 0, 54, 56, 58, 60, 76};
+        int[] villages = new int[]{1, 33, 67, 93, 0, 54, 56, 58, 60};
         if (GameCanvas.loadmap == null) return 1;
         int cur = GameCanvas.loadmap.idMap;
         int bestMap = 1;
@@ -400,11 +378,12 @@ public class AutoSellManager {
         if (GoBackNavigator.graph != null) {
             int fromNode = GoBackNavigator.graph.byId(cur);
             if (fromNode >= 0) {
+                GoBackAtlas.repairRemoteLinks(GoBackNavigator.graph,fromNode);
                 for (int i = 0; i < villages.length; i++) {
                     int v = villages[i];
-                    int toNode = GoBackNavigator.graph.byId(v);
+                    int toNode = GoBackNavigator.graph.node(MenuUP.stripAccents(GoBackAtlas.getMapName(v)),v);
                     if (toNode >= 0) {
-                        GoBackRoutes.Plan plan = GoBackNavigator.graph.plan(fromNode, toNode);
+                        GoBackRoutes.Plan plan = GoBackNavigator.graph.planReturn(fromNode, toNode,null);
                         if (plan != null && plan.hops < bestHops) {
                             bestHops = plan.hops;
                             bestMap = v;
@@ -448,6 +427,7 @@ public class AutoSellManager {
      * Gọi định kỳ trong vòng lặp game update()
      */
     public static void update() {
+        isApproachingShop=false;
         if (AutoUpgrade.active) return;
         loadConfig();
         if (GameCanvas.currentScreen != GameCanvas.game || GameScreen.player == null) {
@@ -495,18 +475,29 @@ public class AutoSellManager {
 
                             logInfo("Hanh trang con " + emptySlots + " o trong -> Ve lang ban do!");
 
-                            if (returnMethod == 0) {
-                                // Phương thức 1 (Mặc định): Tự thoát ra vào lại (Relog) để tức thì về Làng
-                                MenuUP.triggerRelogToVillage();
-                            } else {
-                                // Phương thức 2: Dùng GoBack tìm đường đi bộ về Làng
-                                int villageMap = findNearestVillageMapId();
-                                GoBackNavigator.update(villageMap, -1, -1, -1);
+                            sellVillage=findNearestVillageMapId();
+                            recallDeadline=0L;
+                            MenuUP.isGoBackActive=true;
+                            MenuUP.isGoBackPaused=false;
+                            GoBackNavigator.start();
+                            if(returnMethod==1){
+                                Item recall=findRecallItem();
+                                if(recall!=null){
+                                    recallDeadline=now+15000L;
+                                    GlobalService.gI().Use_Potion((short)recall.Id);
+                                } else logInfo("Khong co Bua ve lang; dung da va di bo.");
                             }
                         }
                     }
                 }
+                if(isReturningToSell && now>=recallDeadline){
+                    if(sellVillage<0)sellVillage=findNearestVillageMapId();
+                    GoBackNavigator.update(sellVillage,-1,-1,-1);
+                }
             } else {
+                if(isReturningToSell && sellVillage>=0){
+                    GoBackNavigator.stop();MenuUP.isGoBackActive=false;sellVillage=-1;recallDeadline=0L;
+                }
                 // ĐANG Ở TRONG LÀNG: Phải tìm và đứng cạnh NPC mới được bán đồ
                 if (isReturningToSell || isFull || queueSell.size() > 0) {
                     MainObject npc = findShopNpc();
@@ -538,7 +529,7 @@ public class AutoSellManager {
                 return;
             }
 
-            long delay = delaySellMs >= 1000L ? delaySellMs : 1000L;
+            long delay = 2000L;
             if (now - lastSellTime >= delay) {
                 MainItem itemToSell = null;
                 while (queueSell.size() > 0) {
@@ -566,6 +557,7 @@ public class AutoSellManager {
                     logInfo("Auto Sell: Da don dep xong (" + totalSoldSession + " mon)!");
                     if (isReturningToSell) {
                         isReturningToSell = false;
+                        sellVillage=-1;recallDeadline=0L;
                         if (MenuUP.isGoBackEnabled && MenuUP.farmMapId >= 0) {
                             MenuUP.resumeGoBackAfterSell();
                         }
@@ -578,6 +570,9 @@ public class AutoSellManager {
     public static void toggleAutoSell() {
         loadConfig();
         isAutoSellEnabled = !isAutoSellEnabled;
+        if(!isAutoSellEnabled && isReturningToSell){
+            GoBackNavigator.stop();MenuUP.isGoBackActive=false;resetSession();
+        }
         saveConfig();
         logInfo("Auto Ban Do: " + (isAutoSellEnabled ? "BAT" : "TAT"));
     }
@@ -638,19 +633,7 @@ public class AutoSellManager {
         logInfo("Ban do Da Cuong Hoa (+): " + (isSellUpgraded ? "BAT (Can than)" : "TAT (An toan)"));
     }
 
-    public static void cycleDelaySell() {
-        loadConfig();
-        int nextIdx = 0;
-        for (int i = 0; i < DELAY_STEPS.length; i++) {
-            if (delaySellMs == DELAY_STEPS[i]) {
-                nextIdx = (i + 1) % DELAY_STEPS.length;
-                break;
-            }
-        }
-        delaySellMs = DELAY_STEPS[nextIdx];
-        saveConfig();
-        logInfo("Delay ban do: " + (delaySellMs / 1000) + "." + ((delaySellMs % 1000) / 100) + "s");
-    }
+    public static void cycleDelaySell() { delaySellMs=2000L; }
 
     public static void cycleMinEmptySlots() {
         loadConfig();
@@ -670,7 +653,7 @@ public class AutoSellManager {
         loadConfig();
         returnMethod = (returnMethod == 0) ? 1 : 0;
         saveConfig();
-        logInfo("Cach ve lang: " + (returnMethod == 0 ? "Thoat vao lai (Relog)" : "Di bo GoBack"));
+        logInfo("Cach ve lang: " + (returnMethod == 0 ? "Di bo + da dich chuyen" : "Bua ve lang"));
     }
 
     public static int getQueueCount() {
@@ -682,6 +665,7 @@ public class AutoSellManager {
     }
 
     public static void resetSession() {
+        isReturningToSell=false;sellVillage=-1;recallDeadline=0L;
         queueSell.removeAllElements();
         totalSoldSession = 0;
         lastSellTime = 0L;
@@ -691,6 +675,7 @@ public class AutoSellManager {
         loadConfig();
         isAutoSellEnabled = false;
         isReturningToSell = false;
+        sellVillage=-1;recallDeadline=0L;
         queueSell.removeAllElements();
         lastDeleteSentTime = -3000L;
         saveConfig();

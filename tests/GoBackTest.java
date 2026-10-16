@@ -1,6 +1,7 @@
 package GameObjects;
 
 import CLib.*;
+import InterfaceComponents.iCommand;
 import GameScreen.*;
 import Main.GameCanvas;
 import Model.Point;
@@ -109,7 +110,7 @@ public class GoBackTest {
         GameScreen.player.x=108;GameScreen.player.y=60;GameScreen.player.posTransRoad=null;
         GameScreen.player.hp=100;GameScreen.player.Action=0;GameScreen.isMapLang=id==1;
         GameScreen.Vecplayers.removeAllElements();
-        if(id!=1) { MainObject m=new MainObject();m.typeObject=1;m.Lv=id==134?134:3;GameScreen.Vecplayers.addElement(m); }
+        if(id!=1) { MainObject m=new MainMonster();m.typeObject=1;m.isInfo=true;m.Lv=id==134?134:3;GameScreen.Vecplayers.addElement(m); }
         LoadMap.Area=0;LoadMapScreen.isNextMap=true;GameCanvas.currentScreen=GameCanvas.game;
     }
     static void newRun(String server,int goal,String name) {
@@ -236,8 +237,10 @@ public class GoBackTest {
         GameScreen.player.x=36;GameScreen.player.y=36;
         int writes=Model.CRes.writes;
         MenuUP.tick(); // No clock advance: first ready frame in the village.
+        check(GameScreen.player.posTransRoad==null,"first village frame waits for stone metadata");
+        mSystem.now+=1100;MenuUP.tick();
         check(GameScreen.player.posTransRoad!=null && (GameScreen.player.toX!=36 || GameScreen.player.toY!=36),
-            "village delayed walking for absent stone or current-cell waypoint");
+            "village departs after bounded NPC wait");
         check(Model.CRes.writes==writes,"route persistence blocked departure frame");
         java.lang.reflect.Field wait=GoBackNavigator.class.getDeclaredField("waitUntil");wait.setAccessible(true);
         java.lang.reflect.Field replan=GoBackNavigator.class.getDeclaredField("nextPlan");replan.setAccessible(true);
@@ -245,6 +248,8 @@ public class GoBackTest {
         setMap(400,"passage",new String[]{"saved"});
         GameScreen.player.x=36;GameScreen.player.y=36;
         MenuUP.tick();
+        check(wait.getLong(null)==0L,"new map clears preceding transition timeout");
+        mSystem.now+=1100;MenuUP.tick();
         check(GameScreen.player.posTransRoad!=null && (GameScreen.player.toX!=36 || GameScreen.player.toY!=36),
             "new map retained preceding leg timeout");
         check(Model.CRes.writes==writes,"map transition wrote graph before continuing");
@@ -614,15 +619,278 @@ public class GoBackTest {
 
         check(GlobalService.changes == 1, "did not change area when standing next to sign");
 
+        GoBackNavigator.stopMovement();GameScreen.player.x=12;GameScreen.player.y=12;
+        check(!GoBackNavigator.approachAreaSign(),"farm support must approach a distant area sign");
+        check(GlobalService.changes==1,"approaching sign must not itself select or pay for an area");
+        GameScreen.player.x=90;GameScreen.player.y=100;
+        check(GoBackNavigator.approachAreaSign(),"farm support can request list once near sign");
+        check(GameScreen.player.countAutoMove==0,"stop walking before opening area list");
+
         GameScreen.Vecplayers.removeElement(sign);
     }
+    static void winterToPort() {
+        GoBackRoutes g = new GoBackRoutes();
+        GoBackAtlas.seed(g);
+        int winter = g.byName("thi tran mua dong");
+        int port = g.byName("thanh pho cang");
+        int westShore = g.byName("khu bo tay");
+        check(winter == 93 && port == 67 && westShore == 70, "map id verification");
+        check(!GoBackAtlas.isTeleportable(westShore), "mob map must not be a direct teleport stone destination");
+        check(GoBackAtlas.isTeleportable(port), "port city must be a teleport stone destination");
+        check(GoBackAtlas.getNearestTeleportMap(westShore) == port, "nearest teleport map for west shore must be port city");
+        GoBackAtlas.addStoneRoutes(g, winter, 100, 100, 9);
+        GoBackRoutes.Plan plan = g.planReturn(winter, westShore, null);
+        check(plan != null, "plan from winter to west shore must not be null");
+        check(plan.hops == 2, "plan from winter to west shore must take 2 hops via stone instead of 12 hops walking");
+        check(plan.first.npc == 9, "first hop must be teleport stone");
+        check(plan.first.to == port, "first hop must teleport to port city");
+    }
+    static void delayedStoneReplan() throws Exception {
+        newRun("late-stone",70,"khu bo tay");
+        GoBackNavigator.prioritizeStone=true;
+        setMap(93,"thi tran mua dong",new String[]{GoBackAtlas.getMapName(92)});
+        GoBackNavigator.observe();GoBackNavigator.startMapSelection();
+        // Keep a valid long walking route, but remove remote landing metadata.
+        GoBackRoutes g=GoBackNavigator.graph;
+        int port=g.node("thanh pho cang",67);
+        g.get(port).exits.removeAllElements();g.get(port).scanned=true;
+        mSystem.now+=1100;
+        GoBackNavigator.update(70,-1,-1,-1);
+        java.lang.reflect.Field selection=GoBackNavigator.class.getDeclaredField("selected");selection.setAccessible(true);
+        GoBackRoutes.Exit before=(GoBackRoutes.Exit)selection.get(null);
+        check(before!=null && before.npc==-1,"walking selected before stone NPC arrives");
+        MainObject stone=new MainObject();stone.typeObject=2;stone.ID=9;stone.name="Da dich chuyen";
+        stone.x=108;stone.y=60;GameScreen.Vecplayers.addElement(stone);
+        GoBackNavigator.update(70,-1,-1,-1);
+        GoBackRoutes.Exit after=(GoBackRoutes.Exit)selection.get(null);
+        check(after!=null && after.npc==9 && after.to==port,"late stone replans to port then walks to high-level target");
+        check(g.planWalking(port,g.byName("khu bo tay"),null)!=null,"remote landing path repaired despite existing walking alternative");
+        GoBackNavigator.stop();
+    }
+    static void whiteGateStoneRoute() throws Exception {
+        GoBackRoutes g=new GoBackRoutes();GoBackAtlas.seed(g);
+        int port=g.node("thanh pho cang",67),winter=g.node("thi tran mua dong",93);
+        int gate=g.node(GoBackNavigator.key(GoBackAtlas.getMapName(92)),92);
+        int other=g.byName(GoBackNavigator.key(GoBackAtlas.getMapName(94)));
+        g.get(winter).exits.removeAllElements();g.get(winter).scanned=true;
+        GoBackAtlas.repairRemoteLinks(g,port);
+        check(g.planWalking(winter,gate,null).hops==1,"repaired winter to white gate remains direct");
+        check(g.planWalking(winter,other,null).hops==1,"both unknown-coordinate branches survive repair");
+        GoBackAtlas.addStoneRoutes(g,port,108,60,9);
+        GoBackRoutes.Plan route=g.planStoneFirst(port,gate,null);
+        check(route!=null && route.first.to==winter && route.hops==2,"white gate uses winter stone landing then one walking map");
+        GoBackRoutes restored=GoBackRoutes.load(g.save());
+        check(restored.planWalking(winter,gate,null).hops==1 && restored.planWalking(winter,other,null).hops==1,"both repaired branches survive save and load");
+        // Even a one-hop walking alternative must not bypass the user's stone-first rule.
+        g.exit(port,gate,12,60,-1);
+        check(g.planStoneFirst(port,gate,null).first.to==winter,"stone-first keeps nearest landing over direct walking alternative");
+    }
+    static void reviveNoGoBackSpam() {
+        newRun("revive-no-spam", 70, "khu bo tay");
+        setMap(70, "khu bo tay", new String[]{"thanh pho cang"});
+        LoadMap.Area = 0; MenuUP.farmArea = 0;
+        GameScreen.player.x = 84; GameScreen.player.y = 84;
+        MenuUP.farmX = 84; MenuUP.farmY = 84;
+        // Simulate player dying on spot
+        GameScreen.player.hp = 0;
+        MenuUP.tick();
+        // Simulate player reviving on spot
+        GameScreen.player.hp = 100;
+        MenuUP.tick();
+        // GoBack should complete arrival on spot without remaining active
+        check(!MenuUP.isGoBackActive, "goback active should finish arrival on spot without traveling");
+    }
+    static void learnedLevels() throws Exception {
+        GoBackRoutes old=new GoBackRoutes();int a=old.node("bad range",400),b=old.node("next",401);
+        old.get(a).scanned=true;old.get(a).minLevel=1;old.get(a).maxLevel=135;
+        old.confirm(old.exit(a,b,12,108,-1),b);
+        byte[] legacy=old.save();legacy[3]=2;
+        GoBackRoutes migrated=GoBackRoutes.load(legacy);
+        check(migrated.get(a).minLevel==0 && migrated.get(a).maxLevel==0,"clear legacy levels once");
+        check(migrated.get(a).scanned && migrated.get(a).exits.size()==1 && ((GoBackRoutes.Exit)migrated.get(a).exits.elementAt(0)).confirmed,"migration preserves confirmed routes");
+        migrated.get(a).minLevel=15;migrated.get(a).maxLevel=19;
+        GoBackRoutes recorded=new GoBackRoutes();
+        int bad=recorded.node("bo bien",11),good=recorded.node("ho ky uc",9),starter=recorded.node("bia rung",3);
+        recorded.get(bad).minLevel=1;recorded.get(bad).maxLevel=23;
+        recorded.get(good).minLevel=15;recorded.get(good).maxLevel=19;
+        recorded.get(starter).minLevel=1;recorded.get(starter).maxLevel=5;
+        byte[] v3=recorded.save();v3[3]=3;GoBackRoutes repaired=GoBackRoutes.load(v3);
+        check(repaired.get(bad).maxLevel==0,"only reported polluted ranges reset");
+        check(repaired.get(good).minLevel==15 && repaired.get(starter).minLevel==1,"keep survey and genuine level one maps");
+        int[] bossMaps={6,10,14,18,28,32,47},bossLevels={10,20,30,40,50,50,70};
+        for(int i=0;i<bossMaps.length;i++)check(GoBackAtlas.dailyBossLevel(bossMaps[i])==bossLevels[i],"daily boss level from user");
+        check(GoBackAtlas.dailyBossLevel(11)==0,"normal maps have no daily boss label");
+        GoBackRoutes restored=GoBackRoutes.load(migrated.save());
+        check(restored.get(a).minLevel==15 && restored.get(a).maxLevel==19,"new ranges survive reload");
+        newRun("learn-levels",400,"field");setMap(400,"field",new String[0]);
+        GameScreen.Vecplayers.removeAllElements();
+        MainObject mob=new MainMonster();mob.typeObject=1;mob.Lv=1;
+        GameScreen.Vecplayers.addElement(mob);GoBackNavigator.observe();
+        GoBackRoutes.Node node=GoBackNavigator.graph.get(GoBackNavigator.graph.byId(400));
+        check(node.maxLevel==0,"unverified placeholder level ignored");
+        mob.isInfo=true;mob.Lv=15;mSystem.now+=2100;GoBackNavigator.observe();
+        check(node.minLevel==15 && node.maxLevel==15,"server verified level learned");
+        MainObject removed=new MainMonster();removed.typeObject=1;removed.isInfo=true;removed.isRemove=true;removed.Lv=1;
+        MainObject boss=new MainMonster();boss.typeObject=1;boss.isInfo=true;boss.typeBoss=1;boss.Lv=135;
+        GameScreen.Vecplayers.addElement(removed);GameScreen.Vecplayers.addElement(boss);
+        mSystem.now+=2100;GoBackNavigator.observe();
+        check(node.minLevel==15 && node.maxLevel==15,"removed monsters and bosses excluded");
+        MainMonster box=new MainMonster();box.typeObject=1;box.isInfo=true;box.Lv=1;box.typeMonster=13;
+        MainMonster escort=new MainMonster();escort.typeObject=1;escort.isInfo=true;escort.Lv=1;escort.nameowner="player";
+        GameScreen.Vecplayers.addElement(box);GameScreen.Vecplayers.addElement(escort);
+        mSystem.now+=2100;GoBackNavigator.observe();
+        check(node.minLevel==15,"special objects cannot pollute ranges with level one");
+        mob.Lv=19;mSystem.now+=2100;GoBackNavigator.observe();
+        check(node.minLevel==15 && node.maxLevel==19,"new real levels extend observed range");
+        setMap(1,"village",new String[0]);GameScreen.Vecplayers.addElement(mob);
+        mSystem.now+=2100;GoBackNavigator.observe();
+        check(GoBackNavigator.graph.get(GoBackNavigator.graph.byId(1)).maxLevel==0,"village never inherits monster range");
+    }
+    static void mapListCorrections() throws Exception {
+        GoBackRoutes g=new GoBackRoutes();int forest=g.node("rung chet",25),bay=g.node("vinh caribe",73);
+        g.get(forest).minLevel=1;g.get(forest).maxLevel=50;g.get(bay).minLevel=1;g.get(bay).maxLevel=110;
+        byte[] old=g.save();old[3]=4;g=GoBackRoutes.load(old);
+        check(g.get(forest).minLevel==41 && g.get(forest).maxLevel==44,"forest ignores boss range");
+        check(g.get(bay).maxLevel==0,"old corrupted bay range relearns");
+        int[] roles={1,33,67,93,2,36,50};
+        for(int i=0;i<roles.length;i++){
+            GoBackRoutes.Node n=g.get(g.node("role"+roles[i],roles[i]));
+            check(GoBackAtlas.listMap(n),"town and utility maps visible without monsters");
+            check(GoBackAtlas.listLevel(n)>GoBackAtlas.listLevel(g.get(forest)),"utilities sorted after levels");
+        }
+        GoBackRoutes.Node hell=g.get(g.node("hell",62));hell.scanned=true;hell.minLevel=90;hell.maxLevel=99;
+        check(!GoBackAtlas.listMap(hell),"hell floor one removed from choices");
+        check(GoBackAtlas.listLabel(g.get(forest),"Rừng chết").equals("Rừng chết (Lv 41-44)"),"compact fixed forest label");
+        GoBackRoutes.Node boss=g.get(g.node("boss",6));
+        String label=GoBackAtlas.listLabel(boss,"Khe Vực");
+        check(label.indexOf("lượt")==-1 && label.indexOf("đã gặp")==-1 && label.indexOf("Lv 10")>=0,"compact boss label");
+        check(GoBackAtlas.listLevel(boss)<GoBackAtlas.listLevel(g.get(forest)),"boss sorted by level");
+    }
+    static void missingStoneFallback() throws Exception {
+        newRun("missing-stone-fallback",401,"saved");setMap(400,"passage",new String[]{"saved"});
+        GoBackNavigator.observe();
+        GoBackRoutes g=GoBackNavigator.graph;int from=g.byId(400),goal=g.node("saved",401);
+        GoBackRoutes.Exit stale=g.exit(from,goal,84,84,9);
+        java.lang.reflect.Field selected=GoBackNavigator.class.getDeclaredField("selected");selected.setAccessible(true);selected.set(null,stale);
+        java.lang.reflect.Field halted=GoBackNavigator.class.getDeclaredField("halted");halted.setAccessible(true);
+        mSystem.now+=100;GoBackNavigator.update(401,-1,-1,-1);
+        check(!halted.getBoolean(null),"missing stone replans instead of halting");
+        check(selected.get(null)==null,"wait briefly for delayed NPC data before leaving");
+        mSystem.now+=1100;GoBackNavigator.update(401,-1,-1,-1);
+        GoBackRoutes.Exit chosen=(GoBackRoutes.Exit)selected.get(null);
+        check(chosen!=null && chosen.npc==-1,"missing stone immediately selects walking route");
+        check(stale.unavailable && !stale.blocked,"missing stone is unavailable, not a failed route");
+        MainObject loaded=new MainObject();loaded.typeObject=2;loaded.ID=9;loaded.name="Da dich chuyen";loaded.x=84;loaded.y=84;
+        GameScreen.Vecplayers.addElement(loaded);GoBackNavigator.update(401,-1,-1,-1);
+        chosen=(GoBackRoutes.Exit)selected.get(null);
+        check(chosen!=null && chosen.npc==9 && !stale.unavailable,"late NPC restores cached stone route in same map");
+        int arenas=0;
+        for(int id=0;id<GoBackAtlas.MAP_NAMES.length;id++){
+            GoBackRoutes.Node n=g.get(g.node("map"+id,id));
+            if(GoBackAtlas.mapRole(id).equals("Khu PK") && GoBackAtlas.listMap(n))arenas++;
+        }
+        check(arenas==1,"only one arena choice");
+        GoBackRoutes.Node ice=g.get(g.byId(92));
+        check(GoBackAtlas.listLabel(ice,"Cổng trắng").equals("Cổng trắng (Ice Golem Lv 124)"),"ice golem label");
+        check(GoBackAtlas.listLevel(ice)==124,"ice sorted at level 124");
+    }
+    static void selectMapRegression() throws Exception {
+        newRun("list-selection",8,"thung lung ky bi");
+        setMap(4,"hang lua",new String[0]);GoBackNavigator.observe();
+        GoBackRoutes g=GoBackNavigator.graph;
+        int goal=g.node("thung lung ky bi",8),fields=g.node("canh dong soi",7);
+        g.get(fields).exits.removeAllElements();g.get(fields).scanned=true;
+        GameCanvas.menu2.isShowMenu=true;MenuUP.setFarmMap(8,-1,-1,(byte)-1);
+        check(MenuUP.isGoBackActive && MenuUP.farmMapId==8 && MenuUP.farmX==-1,"map list starts with requested destination and no invented position");
+        check(!GameCanvas.menu2.isShowMenu,"map selection closes list");
+        Point exit=new Point();exit.name="bia rung";exit.x=12;exit.y=108;
+        LoadMap.vecPointChange.addElement(exit);
+        mSystem.now+=2100;MenuUP.tick();
+        int current=g.byId(4);
+        GoBackRoutes.Plan route=g.planReturn(current,goal,null);
+        check(route!=null && route.first.npc==-1 && route.first.x==12,"late portal and remote missing link repaired for selected map");
+        check(MenuUP.farmMapId==8 && MenuUP.isGoBackActive,"planning keeps selected map active");
+        setMap(8,"thung lung ky bi",new String[0]);mSystem.now+=2100;MenuUP.tick();
+        check(!MenuUP.isGoBackActive && MenuUP.farmMapId==8 && MenuUP.farmX>=0,"map-only trip completes and captures actual arrival position");
+    }
+    static void ferryTrip() throws Exception {
+        newRun("ferry-trip",8,"thung lung ky bi");setMap(70,"khu bo tay",new String[]{"thanh pho cang"});
+        GoBackNavigator.observe();GoBackNavigator.startMapSelection();
+        GoBackNavigator.update(8,-1,-1,-1);mSystem.now+=100;GoBackNavigator.update(8,-1,-1,-1);
+        check(GoBackNavigator.status.indexOf("khac du kien")<0,"walk to port without treating approach as wrong landing");
+        setMap(67,"thanh pho cang",new String[]{"khu bo tay"});GoBackNavigator.observe();
+        MainObject haku=new MainObject();haku.typeObject=2;haku.ID=12;haku.name="Mr Haku";haku.x=108;haku.y=60;
+        GameScreen.Vecplayers.addElement(haku);MenuUP.isGoBackActive=true;
+        GoBackNavigator.update(8,-1,-1,-1);
+        mVector menu=new mVector();menu.addElement(new iCommand("Đóng"));menu.addElement(new iCommand("Đồng ý"));
+        check(!GoBackNavigator.onFerryMenu(13,4,"Phí vận chuyển là 500 vàng",menu),"unrelated NPC cannot confirm ferry");
+        check(!GoBackNavigator.onFerryMenu(12,4,"Phí vận chuyển là 1500 vàng",menu),"unexpected ferry fee stays manual");
+        check(GoBackNavigator.onFerryMenu(12,4,"Muốn đi đâu thì mau lên. Phí vận chuyển là 500 vàng",menu),"confirm Haku fare");
+        check(GlobalService.lastIndex==1,"choose agree by caption");
+        check(!GoBackNavigator.onFerryMenu(12,4,"Phí vận chuyển là 500 vàng",menu),"no second fare confirmation");
+        GameScreen.player.useShip=true;GameCanvas.currentScreen=new ShipScr();int boosts=GlobalService.boosts;
+        GoBackNavigator.observe();GoBackNavigator.observe();check(GlobalService.boosts==boosts+1,"speed boost once per voyage");
+        setMap(19,"cua bien",new String[]{"nghia dia cat"});GameScreen.player.useShip=false;
+        GoBackNavigator.observe();GoBackNavigator.update(8,-1,-1,-1);
+        check(MenuUP.farmMapId==8,"ferry retains original destination");
+        check(GoBackNavigator.status.indexOf("khac du kien")<0,"normal landing resumes route");
+        check(GoBackAtlas.sameLand(70,67) && GoBackAtlas.sameLand(19,8) && !GoBackAtlas.sameLand(70,8),"ferry connects separate land networks");
+    }
+    static void manualFerryBoost() throws Exception {
+        newRun("manual-ferry",8,"thung lung ky bi");
+        GoBackNavigator.startMapSelection();MenuUP.isGoBackActive=true;
+        ShipScr ship=new ShipScr();GameCanvas.currentScreen=ship;
+        GameScreen.player.useShip=false;
+        int boosts=GlobalService.boosts;
+        MenuUP.isGoBackPaused=true;GoBackNavigator.observe();
+        check(GlobalService.boosts==boosts,"paused trip does not boost");
+        MenuUP.isGoBackPaused=false;ship.center=null;GoBackNavigator.observe();
+        check(GlobalService.boosts==boosts,"wait for available boost button");
+        ship.center=new Object();GoBackNavigator.observe();GoBackNavigator.observe();
+        check(GlobalService.boosts==boosts+1,"manual boarding boosts once without intercepted fare or useShip flag");
+        GoBackNavigator.startMapSelection();ship.isSpeed=true;GoBackNavigator.observe();
+        check(GlobalService.boosts==boosts+1,"already accelerated boat does not send another request");
+        GoBackNavigator.stop();MenuUP.isGoBackActive=false;ship.isSpeed=false;GoBackNavigator.observe();
+        check(GlobalService.boosts==boosts+1,"cancelled trip does not boost");
+    }
     public static void main(String[] args) throws Exception {
+        npcObstacleApproach();
+        whiteGateStoneRoute();
+        delayedStoneReplan();
+        manualFerryBoost();
+        ferryTrip();
+        selectMapRegression();
+        missingStoneFallback();
+        mapListCorrections();
+        learnedLevels();
         paths();routes();runtime();noBacktracking();instantMapResume();atlas();teleport();snapshotsAndTimeouts();
         nativeReturn();
         strictMounts();portalRegressions();fiveVillages();largeMapAndRecovery();profiles();
-        stableWaypoints();deathReturn();areaSignNavigation();
+        stableWaypoints();deathReturn();areaSignNavigation();winterToPort();reviveNoGoBackSpam();
         check(MenuUP.stripAccents("  Rặng  Đá Ngầm ").equals("rang da ngam"),"name normalization");
         check(MenuUP.getMapIdByName("Fire extra")==-1,"substring destination matching");
         System.out.println("PASS: "+assertions+" checks; graph, persistence, village regression, obstacles, Lv134, teleport, area retry");
+    }
+    static void npcObstacleApproach() {
+        newRun("npc-obstacle",1,"village");setMap(1,"village",new String[0]);
+        GoBackNavigator.observe();GoBackNavigator.stopMovement();
+        GameScreen.player.x=36;GameScreen.player.y=36;
+        MainObject npc=new MainObject();npc.x=180;npc.y=36;npc.typeObject=2;
+        int w=GameCanvas.loadmap.mapW;
+        for(int y=0;y<6;y++)GameCanvas.loadmap.mapType[y*w+3]=1;
+        boolean arrived=false;int maxY=0;
+        nativeMovement=true;GameScreen.player.vMax=4;
+        for(int i=0;i<1500;i++){
+            mSystem.now+=100;
+            if(GoBackNavigator.approachNpc(npc)){arrived=true;break;}
+            movePlayer();maxY=Math.max(maxY,GameScreen.player.y);
+        }
+        check(arrived && MainObject.getDistance(GameScreen.player.x,GameScreen.player.y,npc.x,npc.y)<=45,"NPC reached around wall within selling range");
+        check(maxY>=6*24,"NPC route uses opening instead of walking through wall");
+        GoBackNavigator.stopMovement();GameScreen.player.x=36;GameScreen.player.y=36;
+        for(int y=0;y<GameCanvas.loadmap.mapH;y++)GameCanvas.loadmap.mapType[y*w+3]=1;
+        npc=new MainObject();npc.x=180;npc.y=36;npc.typeObject=2;mSystem.now+=3000;
+        check(!GoBackNavigator.approachNpc(npc) && GameScreen.player.posTransRoad==null,"sealed wall produces no direct movement command");
+        nativeMovement=false;
     }
 }

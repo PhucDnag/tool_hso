@@ -5,6 +5,7 @@ import CLib.mVector;
 import GameScreen.GameScreen;
 import GameScreen.LoadMapScreen;
 import GameScreen.LoginScreen;
+import GameScreen.ShipScr;
 import InterfaceComponents.iCommand;
 import Main.GameCanvas;
 import Model.CRes;
@@ -59,6 +60,7 @@ public final class GoBackNavigator {
     private static MainObject requestedStone;
     private static int openedCategory;
     public static boolean prioritizeStone = true;
+    private static int plannedStoneNpc=-1;
     private static java.util.Hashtable probed = new java.util.Hashtable();
 
     public static boolean ready() {
@@ -87,6 +89,16 @@ public final class GoBackNavigator {
         return n.mapId>=0 ? MenuUP.getMapName(n.mapId) : n.key;
     }
     public static void observe() {
+        // Boarding may be confirmed manually. The live ship button, not the
+        // intercepted fare dialog, determines whether acceleration is available.
+        if(!ferryBoosted && MenuUP.isGoBackActive && !MenuUP.isGoBackPaused
+                && GameCanvas.currentScreen instanceof ShipScr){
+            ShipScr ship=(ShipScr)GameCanvas.currentScreen;
+            if(ship.isSpeed)ferryBoosted=true;
+            else if(ship.center!=null){
+                ferryBoosted=true;GlobalService.gI().useShip((byte)2);status="Dang tang toc thuyen";
+            }
+        }
         if(!ready()) {
             readyLastTick=false;
             if (MenuUP.isGoBackActive || returnRequired) fsmState = STATE_WAIT_MAP_LOAD;
@@ -108,7 +120,7 @@ public final class GoBackNavigator {
             catch(Exception ex) { graph=new GoBackRoutes(); }
             GoBackAtlas.seed(graph);
             armed=null; selected=null; plan=null; readyLastTick=false;
-            seenMap=-1; current=-1; savedRevision=graph.revision;
+            seenMap=-1; current=-1; savedRevision=-1;
             visitedMaps.clear();
         }
         int id=GameCanvas.loadmap.idMap;
@@ -136,20 +148,12 @@ public final class GoBackNavigator {
             // A death/recall/login is not evidence of a portal edge.
             armed=null; selected=null; plan=null; probeNpc=-1; menuOptions=null;
             requestedMenu=0L; menuRequests=0; requestedStone=null; halted=false;
-            waitUntil=0L; nextPlan=0L;
+            waitUntil=0L; nextPlan=0L; plannedStoneNpc=-1;
             portalAttempts=0; retreating=false;
             if(road!=null || MenuUP.isGoBackActive) stopMovement();
             seenMap=id; seenArea=LoadMap.Area; seenTiles=GameCanvas.loadmap.mapType;
             lastMetadata=0L;
-            int size=LoadMap.vecPointChange.size();
-            String[] names=new String[size]; int[] xs=new int[size],ys=new int[size];
-            for(int i=0;i<size;i++) {
-                Point exit=(Point)LoadMap.vecPointChange.elementAt(i);
-                names[i]=key(exit.name); xs[i]=exit.x;
-                // ReadMessenge offsets the TOP arrow by -10 only for drawing.
-                ys[i]=exit.y+(exit.dis==2?10:0);
-            }
-            graph.scan(current,names,xs,ys);
+            scanPortals();
             graph.get(current).village=GameScreen.isMapLang;
         }
         long now=mSystem.currentTimeMillis();
@@ -168,10 +172,23 @@ public final class GoBackNavigator {
         }
         if(now-lastMetadata>2000L) {
             lastMetadata=now;
+            scanPortals();
             GoBackRoutes.Node node=graph.get(current);
+            if(node.mapId==25 && (node.minLevel!=41 || node.maxLevel!=44)){
+                node.minLevel=41;node.maxLevel=44;graph.revision++;
+            }
             for(int i=0;i<GameScreen.Vecplayers.size();i++) {
                 MainObject obj=(MainObject)GameScreen.Vecplayers.elementAt(i);
-                if(obj==null || obj.typeObject!=1 || obj.Lv<=0) continue;
+                if(node.mapId==25 || node.village || !(obj instanceof MainMonster) || obj.typeObject!=1 || !obj.isInfo
+                        || obj.isRemove || obj.typeBoss!=0 || obj.Lv<=0) continue;
+                MainMonster monster=(MainMonster)obj;
+                // Houses, boxes, escorts, quest NPCs and gates share typeObject=1.
+                if(monster.typeMonster==7 || monster.typeMonster==18 || (monster.typeMonster>=12 && monster.typeMonster<=16)
+                        || (monster.nameowner!=null && monster.nameowner.length()>0) || monster.isBossNew()) continue;
+                String monsterName=MenuUP.stripAccents(monster.name==null?"":monster.name).trim();
+                if(GoBackAtlas.dailyBossLevel(node.mapId)>0
+                        && monsterName.equals(MenuUP.stripAccents(GoBackAtlas.dailyBossName(node.mapId)).trim()))continue;
+                if(monsterName.indexOf("lua thieng")>=0)continue;
                 int low=node.minLevel==0?obj.Lv:Math.min(node.minLevel,obj.Lv);
                 int high=Math.max(node.maxLevel,obj.Lv);
                 if(low!=node.minLevel || high!=node.maxLevel) {
@@ -184,12 +201,28 @@ public final class GoBackNavigator {
         if(!MenuUP.isGoBackActive && !(returnRequired && MenuUP.isGoBackEnabled && !MenuUP.isGoBackPaused)
                 && now-lastSave>5000L && savedRevision!=graph.revision) saveGraph();
     }
+    private static void scanPortals(){
+            int size=LoadMap.vecPointChange.size();
+            String[] names=new String[size]; int[] xs=new int[size],ys=new int[size];
+            for(int i=0;i<size;i++) {
+                Point exit=(Point)LoadMap.vecPointChange.elementAt(i);
+                names[i]=key(exit.name); xs[i]=exit.x;
+                // ReadMessenge offsets the TOP arrow by -10 only for drawing.
+                ys[i]=exit.y+(exit.dis==2?10:0);
+            }
+            graph.scan(current,names,xs,ys);
+    }
     private static void saveGraph() {
         if(store.length()==0) return;
         try { CRes.saveRMS(store,graph.save()); savedRevision=graph.revision; lastSave=mSystem.currentTimeMillis(); }
         catch(Exception ex) { /* Keep the in-memory graph if RMS is full. */ }
     }
+    private static boolean mapSelection;
+    public static void startMapSelection(){start();mapSelection=true;}
     public static void start() {
+        plannedStoneNpc=-1;
+        mapSelection=false;
+        ferryFrom=ferryTo=ferryNpc=-1;ferryRequested=0;ferryPaid=ferryBoosted=false;
         blockedWalkCells=null;
         fsmState = STATE_PLAN_ROUTE;
         graph.resetFailures(); traversed.clear(); probed.clear();
@@ -201,6 +234,8 @@ public final class GoBackNavigator {
         stopMovement();
     }
     public static void stop() {
+        plannedStoneNpc=-1;
+        ferryFrom=ferryTo=ferryNpc=-1;ferryRequested=0;ferryPaid=ferryBoosted=false;
         fsmState = STATE_IDLE;
         returnRequired=false;
         visitedMaps.clear();
@@ -222,6 +257,36 @@ public final class GoBackNavigator {
         if(p==null) return;
         p.posTransRoad=null; p.countAutoMove=0; p.toX=p.x; p.toY=p.y;
         p.xStopMove=0; p.yStopMove=0; p.vx=0; p.vy=0;
+    }
+    private static MainObject approachNpcTarget;
+    private static int approachNpcX,approachNpcY,approachNpcMap=-1;
+    private static long nextNpcPath;
+    /** Follow collision-aware waypoints to a reachable cell beside an NPC. */
+    public static boolean approachNpc(MainObject npc) {
+        if(!ready() || npc==null || npc.isRemove || GameScreen.player.hp<=0)return false;
+        Player p=GameScreen.player;
+        if(MainObject.getDistance(p.x,p.y,npc.x,npc.y)<=45){stopMovement();return true;}
+        if(approachNpcTarget!=npc || approachNpcX!=npc.x || approachNpcY!=npc.y || approachNpcMap!=GameCanvas.loadmap.idMap){
+            stopMovement();approachNpcTarget=npc;approachNpcX=npc.x;approachNpcY=npc.y;
+            approachNpcMap=GameCanvas.loadmap.idMap;nextNpcPath=0L;
+        }
+        long now=mSystem.currentTimeMillis();
+        if(road==null){
+            if(now<nextNpcPath)return false;
+            int t=LoadMap.wTile,bestX=-1,bestY=-1,bestLength=2147483647;
+            for(int y=npc.y/t-2;y<=npc.y/t+2;y++)for(int x=npc.x/t-2;x<=npc.x/t+2;x++){
+                int px=x*t+t/2,py=y*t+t/2;
+                if(MainObject.getDistance(px,py,npc.x,npc.y)>36)continue;
+                int[] candidate=path(px,py,0,null);
+                if(candidate!=null && candidate.length<bestLength){bestX=px;bestY=py;bestLength=candidate.length;}
+            }
+            if(bestX<0 || !startWalk(bestX,bestY,0,null)){
+                nextNpcPath=now+2000L;status="Khong co duong trong toi NPC ban do";return false;
+            }
+        }
+        status="Di vong vat can toi NPC ban do";
+        if(walk()<0){stopMovement();nextNpcPath=now+2000L;}
+        return false;
     }
     private static int[] collision(GoBackRoutes.Exit chosen) {
         int[] original=GameCanvas.loadmap.mapType;
@@ -403,7 +468,7 @@ public final class GoBackNavigator {
         failExit();
     }
     public static boolean stone(MainObject npc) {
-        if(npc==null) return false;
+        if(npc==null || npc.isRemove) return false;
         String n=key(npc.name);
         String gt=key(npc.nameGiaotiep);
         return n.indexOf("da dich chuyen")>=0 || n.indexOf("teleport")>=0 || n.indexOf("dich chuyen")>=0
@@ -433,6 +498,20 @@ public final class GoBackNavigator {
         }
         return null;
     }
+    // Used only while GoBack is idle; reuse obstacle-aware walking to the sign.
+    public static boolean approachAreaSign() {
+        MainObject sign=findAreaSignNpc();
+        if(sign==null || MainObject.getDistance(GameScreen.player.x,GameScreen.player.y,sign.x,sign.y)<=48) {
+            stopMovement();return true;
+        }
+        if(road==null && !startWalk(sign.x,sign.y,1,null)
+                && !startWalk(sign.x,sign.y,2,null)) {
+            status="Không tìm được đường tới biển Khu";return false;
+        }
+        if(walk()<0) stopMovement();
+        status="Đang đi tới biển Khu";
+        return false;
+    }
     // NPC IDs are signed bytes on requests and shorts in dynamic-menu replies.
     private static boolean sameNpc(int a,int b) {
         return a==b || (a>=-128 && a<=255 && b>=-128 && b<=255 && (byte)a==(byte)b);
@@ -446,11 +525,11 @@ public final class GoBackNavigator {
     private static boolean approachStone(int id) {
         MainObject npc=MainObject.get_Object(id,(byte)2);
         if(!stone(npc)) npc=findStoneNpc();
-        if(npc==null) { recoverOnError("Khong thay da dich chuyen tren map"); return false; }
+        if(npc==null) { failStone();status="Khong thay da; chuyen sang lo trinh khac";return false; }
         if(stoneNear(npc)) return true;
         requestedMenu=0L; menuOptions=null;
         if(road==null && !startWalk(npc.x,npc.y,1,selected)) {
-            recoverOnError("Khong den gan duoc da dich chuyen");
+            failStone();status="Khong den duoc da; chuyen sang lo trinh khac";return false;
         }
         status="Dang den gan da dich chuyen";
         return false;
@@ -500,7 +579,7 @@ public final class GoBackNavigator {
                 GoBackRoutes.Exit e=(GoBackRoutes.Exit)here.exits.elementAt(i);
                 if(e.npc!=npc.getIDnpc()) continue;
                 int cat=GoBackAtlas.getCategoryForMap(graph.get(e.to).mapId);
-                if(offered.size()>0 && (openedCategory==0 || cat==openedCategory)
+                if(offered.size()>0 && ((categories==0 && openedCategory==0) || (openedCategory>0 && cat==openedCategory))
                         && !offered.containsKey(new Integer(e.to))) graph.block(e);
                 if(categories!=0 && cat>0 && (categories&(1<<cat))==0) graph.block(e);
             }
@@ -530,8 +609,10 @@ public final class GoBackNavigator {
         return menuOptions!=null && menuMap==current && menuTime>=requestedMenu;
     }
     private static boolean nearbyLanding(int goalMap,long now) {
-        int goal=graph.byId(goalMap),best=-1,hops=2147483647;
+        int goal=graph.byId(goalMap);
+        if(goal<0) goal=graph.node(key(MenuUP.farmMapName),goalMap);
         if(goal<0) return false;
+        int best=-1,hops=2147483647;
         GoBackRoutes.Exit landing=null;
         int cap=GoBackAtlas.getCategoryForMap(goalMap);
         int origin=GoBackAtlas.getCategoryForMap(GameCanvas.loadmap.idMap);
@@ -550,7 +631,7 @@ public final class GoBackNavigator {
         }
         if(best<0) return false;
         GoBackRoutes.Plan walking=graph.planWalking(current,goal,visitedMaps);
-        if(walking!=null && walking.hops<hops+1) return false;
+        if(!prioritizeStone && walking!=null && walking.hops<hops+1) return false;
         selected=landing;plan=new GoBackRoutes.Plan(landing,hops+1);
         armed=selected;armedFrom=current;armedAt=now;waitUntil=now+30000L;
         status="Dich chuyen den "+name(landing.to)+", sau do di bo toi diem UP";
@@ -591,7 +672,65 @@ public final class GoBackNavigator {
         if(now-requestedMenu>15000L) { probeNpc=-1; return false; }
         return true;
     }
+    private static int ferryFrom=-1,ferryTo=-1,ferryNpc=-1;
+    private static long ferryRequested;
+    private static boolean ferryPaid,ferryBoosted;
+    private static MainObject findHaku(){
+        for(int i=0;i<GameScreen.Vecplayers.size();i++){
+            MainObject npc=(MainObject)GameScreen.Vecplayers.elementAt(i);
+            if(npc!=null && npc.typeObject==2 && !npc.isRemove
+                    && (key(npc.name).equals("mr haku") || key(npc.nameGiaotiep).equals("mr haku")))return npc;
+        }
+        return null;
+    }
+    public static boolean onFerryMenu(int npc,int menu,String text,mVector options){
+        if(!MenuUP.isGoBackActive || MenuUP.isGoBackPaused || !ready() || halted || ferryPaid || ferryRequested==0 || ferryNpc!=npc
+                || GameCanvas.loadmap.idMap!=ferryFrom || options==null)return false;
+        MainObject haku=findHaku();String message=key(text);
+        if(haku==null || haku.getIDnpc()!=npc || MainObject.getDistance(GameScreen.player.x,GameScreen.player.y,haku.x,haku.y)>48)return false;
+        if(message.indexOf("phi van chuyen la 500 vang")<0)return false;
+        for(int i=0;i<options.size();i++)if(key(((iCommand)options.elementAt(i)).caption).equals("dong y")){
+            ferryPaid=true;ferryRequested=mSystem.currentTimeMillis();
+            GlobalService.gI().Dynamic_Menu((short)npc,(byte)menu,(byte)i);
+            GameCanvas.menu2.isShowMenu=false;status="Da dong y di thuyen; cho server";return true;
+        }
+        return false;
+    }
     public static boolean update(int mapId,int x,int y,int area) {
+        if(!ready() || current<0 || halted)return false;
+        int here=GameCanvas.loadmap.idMap;
+        if(ferryFrom>=0 && ferryRequested>0 && here!=ferryFrom){
+            if(here!=ferryTo){recoverOnError("Thuyen den map khac du kien; kiem tra dich den");return false;}
+            ferryFrom=ferryTo=ferryNpc=-1;ferryRequested=0;ferryPaid=ferryBoosted=false;
+            visitedMaps.clear();selected=null;plan=null;waitUntil=0;nextPlan=0;
+        }
+        if(ferryFrom<0){
+            if(GoBackAtlas.sameLand(here,67) && GoBackAtlas.sameLand(19,mapId)){ferryFrom=67;ferryTo=19;}
+            else if(GoBackAtlas.sameLand(here,19) && GoBackAtlas.sameLand(67,mapId)){ferryFrom=19;ferryTo=67;}
+        }
+        if(ferryFrom<0)return updateLeg(mapId,x,y,area);
+        if(here!=ferryFrom){
+            if(graph.byId(ferryFrom)<0)graph.node(key(GoBackAtlas.getMapName(ferryFrom)),ferryFrom);
+            GoBackAtlas.repairRemoteLinks(graph,current);
+            updateLeg(ferryFrom,-1,-1,-1);return false;
+        }
+        if(GameScreen.player.useShip){status="Dang di thuyen; cho cap ben";return false;}
+        if(ferryRequested>0){
+            status=ferryPaid?"Cho len thuyen":"Cho Mr Haku xac nhan";
+            if(mSystem.currentTimeMillis()-ferryRequested>15000L)recoverOnError("Chua ro ket qua di thuyen; khong tu tra phi lai");
+            return false;
+        }
+        MainObject haku=findHaku();
+        if(haku==null){status="Cho Mr Haku tai ben thuyen";return false;}
+        status="Di toi Mr Haku de qua bien";
+        if(MainObject.getDistance(GameScreen.player.x,GameScreen.player.y,haku.x,haku.y)>48){
+            if(road==null && !startWalk(haku.x,haku.y,1,null)){recoverOnError("Khong den duoc Mr Haku");return false;}
+            if(walk()<0)recoverOnError("Bi ket tren duong toi Mr Haku");return false;
+        }
+        stopMovement();ferryNpc=haku.getIDnpc();ferryRequested=mSystem.currentTimeMillis();
+        GlobalService.gI().getlist_from_npc((byte)ferryNpc);return false;
+    }
+    private static boolean updateLeg(int mapId,int x,int y,int area) {
         if(!ready() || current<0) return false;
         Player p=GameScreen.player; long now=mSystem.currentTimeMillis();
         if(p.hp<=0 || p.Action==4) { armed=null; stopMovement(); return false; }
@@ -666,6 +805,20 @@ public final class GoBackNavigator {
             }
             return false;
         }
+        if(selected!=null && selected.npc!=-1 && findStoneNpc()==null){
+            // Missing NPC data is not a failed teleport. Keep the route eligible
+            // when the object arrives later in this same map.
+            selected.unavailable=true;selected=null;failExit();
+        }
+        // NPC data can arrive after portals. Reconsider a walking leg once
+        // when a stone becomes visible, instead of walking out of the map.
+        MainObject visibleStone=prioritizeStone?findStoneNpc():null;
+        if(visibleStone!=null && plannedStoneNpc!=visibleStone.getIDnpc()){
+            plannedStoneNpc=visibleStone.getIDnpc();
+            if(selected!=null && selected.npc==-1){
+                stopMovement();selected=null;plan=null;armed=null;nextPlan=0L;
+            }
+        }
         if(selected==null) {
             fsmState = STATE_PLAN_ROUTE;
             if(now<nextPlan) return false;
@@ -674,14 +827,27 @@ public final class GoBackNavigator {
             if(goal<0) goal=graph.node(key(MenuUP.farmMapName),mapId);
             MainObject sn = findStoneNpc();
             if(sn!=null && prioritizeStone) {
+                // A complete walking alternative must not hide a shorter
+                // teleport + walk route whose remote portal data is missing.
+                GoBackAtlas.repairRemoteLinks(graph,current);
                 GoBackAtlas.addStoneRoutes(graph,current,sn.x,sn.y,sn.getIDnpc());
             }
+            GoBackRoutes.Node availableNode=graph.get(current);
+            boolean expectStone=GameScreen.isMapLang || GoBackAtlas.isTeleportable(GameCanvas.loadmap.idMap);
+            for(int i=0;i<availableNode.exits.size();i++){
+                GoBackRoutes.Exit e=(GoBackRoutes.Exit)availableNode.exits.elementAt(i);
+                if(e.npc!=-1){e.unavailable=sn==null;expectStone=true;}
+            }
             GoBackRoutes.Plan known=graph.planReturn(current,goal,visitedMaps);
-            if(known==null && sn==null && GameScreen.isMapLang && now-seenMapTime<1000L) {
+            if(known==null && mapSelection){
+                GoBackAtlas.repairRemoteLinks(graph,current);
+                known=graph.planReturn(current,goal,visitedMaps);
+            }
+            if(prioritizeStone && expectStone && sn==null && now-seenMapTime<1000L) {
                 status="Dang doi da dich chuyen...";
                 return false;
             }
-            if(probeNpc!=-1 || known==null)
+            if(probeNpc!=-1 || known==null || prioritizeStone && sn!=null && graph.planStoneFirst(current,goal,visitedMaps)==null)
                 if(inspectStoneRoutes(now)) return false;
             GoBackRoutes.Node node=graph.get(current);
             for(int i=0;i<node.exits.size();i++) {
@@ -691,7 +857,7 @@ public final class GoBackNavigator {
                     MainObject npc=MainObject.get_Object(e.npc,(byte)2);
                     if(!stone(npc)) {
                         if(sn != null) { e.npc=sn.getIDnpc(); e.x=sn.x; e.y=sn.y; }
-                        else { graph.block(e); continue; }
+                        else { e.unavailable=true; continue; }
                     } else {
                         e.x=npc.x; e.y=npc.y;
                     }
@@ -702,7 +868,8 @@ public final class GoBackNavigator {
             }
             plan=null;
             for(int attempt=0;attempt<node.exits.size();attempt++) {
-                plan=graph.planReturn(current,goal,visitedMaps);
+                plan=prioritizeStone && sn!=null?graph.planStoneFirst(current,goal,visitedMaps):null;
+                if(plan==null)plan=graph.planReturn(current,goal,visitedMaps);
                 if(plan==null) break;
                 GoBackRoutes.Exit candidate=plan.first;
                 if(startWalk(candidate.x,candidate.y,candidate.npc!=-1?1:0,candidate)) break;
@@ -730,7 +897,8 @@ public final class GoBackNavigator {
             if(totalHops==0) totalHops=plan.hops;
         }
         fsmState = STATE_WALK_TO_PORTAL;
-        status="Chang "+(transitions+1)+"/"+Math.max(totalHops,transitions+plan.hops)+": "+name(selected.to);
+        status=selected.npc!=-1 ? "Den da dich chuyen: "+name(selected.to)
+            : "Di bo chang "+(transitions+1)+"/"+Math.max(totalHops,transitions+plan.hops)+": "+name(selected.to);
         if(selected.npc==-1 && MainObject.getDistance(p.x,p.y,selected.x,selected.y)<=36) {
             armed=selected; armedFrom=current; armedAt=now;
         }
@@ -744,8 +912,8 @@ public final class GoBackNavigator {
             if(!approachStone(selected.npc)) return false;
             if(requestedMenu==0L) { requestStone(selected.npc); return false; }
             if(!freshMenu()) {
-                if(now-requestedMenu>15000L) {
-                    if (menuRequests < 3) {
+                if(now-requestedMenu>3000L) {
+                    if (menuRequests < 2) {
                         requestStone(selected.npc);
                     } else {
                         failStone();

@@ -53,15 +53,17 @@ public class iCommand { public String caption; public byte subIndex; public void
 'GameObjects/GoBackRoutes.java': """package GameObjects;
 public class GoBackRoutes {
     public static class Plan { public int hops = 1; }
+    public int node(String name,int id){return id;} public Plan planReturn(int a,int b,java.util.Hashtable v){return new Plan();}
     public int byId(int id) { return id; }
     public Plan plan(int from, int to) { return new Plan(); }
 }""",
 'GameObjects/GoBackNavigator.java': """package GameObjects;
 public class GoBackNavigator {
     public static GoBackRoutes graph = new GoBackRoutes();
-    public static void update(int a, int b, int c, int d) {}
+    public static void stopMovement(){}public static MainObject approached;public static boolean approachNpc(MainObject n){approached=n;return false;}public static int updates;public static void start(){}public static void stop(){} public static void update(int a, int b, int c, int d) {updates++;}
     public static String currentName() { return "Lang"; }
 }""",
+'GameObjects/GoBackAtlas.java':'package GameObjects;public class GoBackAtlas {public static void repairRemoteLinks(GoBackRoutes g,int n){}public static String getMapName(int id){return "map"+id;}}',
 'GameObjects/GoBackPosition.java': """package GameObjects;
 public class GoBackPosition {
     public static int snap(int v) { return v; }
@@ -72,7 +74,7 @@ public class LoadMap {
 }""",
 'GameObjects/MenuUP.java': """package GameObjects;
 public class MenuUP {
-    public static boolean isGoBackEnabled=true;
+    public static boolean isGoBackActive,isGoBackPaused;public static boolean isGoBackEnabled=true;
     public static int farmMapId=13;
     public static int farmX=100, farmY=100;
     public static byte farmArea=0;
@@ -88,7 +90,7 @@ public class MenuUP {
 }""",
 'GameObjects/Item.java': """package GameObjects; import CLib.*;
 public class Item {
-    public int Id; public String itemName; public int ItemCatagory; public byte isLock;
+    public int numPotion;public int Id; public String itemName; public int ItemCatagory; public byte isLock;
     public byte tier; public int colorNameItem;
     public static mVector VecInvetoryPlayer=new mVector();
     public static mHashtable VecEquipPlayer=new mHashtable();
@@ -102,7 +104,7 @@ public class CRes {
     public static void saveRMSString_(String k,String v){rms.put(k,v);}
 }""",
 'netcommand/global/GlobalService.java': """package netcommand.global;
-public class GlobalService {
+public class GlobalService {public static int recalls;public void Use_Potion(short id){recalls++;}
     static GlobalService s=new GlobalService();
     public static int sellPackets, lastSoldCat, lastSoldId, lastSoldAction, dialogReplies, homes;
     public static GlobalService gI(){return s;}

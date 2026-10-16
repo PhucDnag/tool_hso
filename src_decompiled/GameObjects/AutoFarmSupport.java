@@ -15,7 +15,8 @@ import java.io.*;
 public final class AutoFarmSupport {
     public static boolean zoneEnabled, fireEnabled, oilEnabled, bookEnabled;
     public static int payment = 2, fallback = 0; // 0 gems, 1 tickets, 2 tickets then gems; areas zero-based
-    public static int fireMinutes = 30, oilMinutes = 30, bookMinutes = 30;
+    public static final int fireMinutes = 60, bookMinutes = 120;
+    private static int oilsUsed;
     public static String status = "Chưa bật";
     private static int[] ids = {-1, -1, -1}, cats = {7, 7, 7};
     private static long[] nextUse = {0L, 0L, 0L};
@@ -24,10 +25,12 @@ public final class AutoFarmSupport {
     private static String owner = "";
     private static long blockedDay = -1L, retryAt, deadline, consumableDeadline;
     private static int requestedArea = -1, requestMap = -1, paidKind = -1;
-    private static int pendingUse = -1, pendingCount, pendingMap, pendingArea;
+    private static int pendingUse = -1, pendingCount, pendingMap, pendingArea, pendingId, pendingCat;
     private static boolean gemFallback, awaitingConfirm, manualPause;
     private static iCommand queuedCommand;
     private static int queuedNpc, queuedMenu, queuedIndex = -1;
+    private static boolean waitingAreas, selectingArea, approachingArea;
+    public static boolean isApproachingArea() {return approachingArea;}
 
     private static long now() { return mSystem.currentTimeMillis(); }
     private static long day() { return (now() + 25200000L) / 86400000L; }
@@ -41,22 +44,29 @@ public final class AutoFarmSupport {
         if (who.equals(owner)) return;
         owner = who;
         zoneEnabled = fireEnabled = oilEnabled = bookEnabled = false;
-        payment = 2; fallback = 0; fireMinutes = oilMinutes = bookMinutes = 30;
+        payment = 2; fallback = 0; oilsUsed=0;
         ids = new int[]{-1,-1,-1}; cats = new int[]{7,7,7}; nextUse = new long[]{0L,0L,0L};
         fireUntil=0; fireMap=fireArea=-1; blockedDay = -1; retryAt = 0; pendingUse = -1; resetRequest(); manualPause = false;
+        status="Chưa bật";
         try {
             byte[] data = CRes.loadRMS(key()); if (data == null) return;
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(data));
-            if (in.readInt() != 2 || !owner.equals(in.readUTF())) return;
+            int version=in.readInt();
+            if ((version!=2 && version!=3) || !owner.equals(in.readUTF())) return;
             zoneEnabled = in.readBoolean(); fireEnabled = in.readBoolean(); oilEnabled = in.readBoolean(); bookEnabled=in.readBoolean();
-            payment = in.readInt(); fallback = in.readInt(); fireMinutes = in.readInt(); oilMinutes = in.readInt(); bookMinutes=in.readInt();
+            payment = in.readInt(); fallback = in.readInt();
+            int oldFire=60,oldBook=120;
+            if(version==2){oldFire=in.readInt();in.readInt();oldBook=in.readInt();}
             for (int i=0;i<3;i++) { ids[i]=in.readInt(); cats[i]=in.readInt(); nextUse[i]=in.readLong(); }
             blockedDay = in.readLong();
             if (payment<0 || payment>2) payment=2;
             if (fallback<0 || fallback==1 || fallback>126) fallback=0;
-            if (fireMinutes<1 || fireMinutes>120) fireMinutes=30;
-            if (oilMinutes<1 || oilMinutes>120) oilMinutes=30;
-            if (bookMinutes<1 || bookMinutes>120) bookMinutes=30;
+            if(version==3){fireUntil=in.readLong();fireMap=in.readInt();fireArea=in.readInt();oilsUsed=in.readInt();}
+            else {
+                if(nextUse[0]>0)nextUse[0]=Math.max(0L,nextUse[0]+(60L-oldFire)*60000L);
+                if(nextUse[2]>0)nextUse[2]=Math.max(0L,nextUse[2]+(120L-oldBook)*60000L);
+                nextUse[1]=0;
+            }
         } catch (Exception e) { zoneEnabled=fireEnabled=oilEnabled=bookEnabled=false; }
     }
 
@@ -64,11 +74,11 @@ public final class AutoFarmSupport {
         if (owner.length()==0) return;
         try {
             ByteArrayOutputStream bytes=new ByteArrayOutputStream(); DataOutputStream out=new DataOutputStream(bytes);
-            out.writeInt(2); out.writeUTF(owner);
+            out.writeInt(3); out.writeUTF(owner);
             out.writeBoolean(zoneEnabled); out.writeBoolean(fireEnabled); out.writeBoolean(oilEnabled); out.writeBoolean(bookEnabled);
-            out.writeInt(payment); out.writeInt(fallback); out.writeInt(fireMinutes); out.writeInt(oilMinutes); out.writeInt(bookMinutes);
+            out.writeInt(payment); out.writeInt(fallback);
             for(int i=0;i<3;i++) {out.writeInt(ids[i]);out.writeInt(cats[i]);out.writeLong(nextUse[i]);}
-            out.writeLong(blockedDay);out.flush(); CRes.saveRMS(key(),bytes.toByteArray());
+            out.writeLong(blockedDay);out.writeLong(fireUntil);out.writeInt(fireMap);out.writeInt(fireArea);out.writeInt(oilsUsed);out.flush(); CRes.saveRMS(key(),bytes.toByteArray());
         } catch(Exception e) { }
     }
 
@@ -78,16 +88,21 @@ public final class AutoFarmSupport {
         resetRequest();
         pendingUse=-1;
         manualPause=true;
-        status="Đã tắt";
+        status="";
         save();
     }
 
     private static void resetRequest() {
+        if(approachingArea) GoBackNavigator.stopMovement();
         requestedArea=-1; paidKind=-1; awaitingConfirm=false;
         queuedCommand=null; queuedIndex=-1;
+        waitingAreas=selectingArea=approachingArea=false;
     }
     public static synchronized int goBackArea(int configured) {
         load();
+        // Zone entry can require payment. Let this manager handle it after
+        // GoBack reaches the map/position, including refusals and fallback.
+        if(zoneEnabled) return -1;
         if(configured>=0 && requestedArea>=0 && requestedArea!=configured) resetRequest();
         return configured;
     }
@@ -97,20 +112,36 @@ public final class AutoFarmSupport {
             && GameCanvas.loadmap!=null && !GameScreen.isMapLang && !MenuUP.isGoBackActive
             && !AutoSellManager.isReturningToSell && !AutoUpgrade.active
             && (MenuUP.isAutoAttack || Player.isAutoFire==1)
-            && (MenuUP.farmMapId<0 || GameCanvas.loadmap.idMap==MenuUP.farmMapId);
+            && (!MenuUP.isGoBackEnabled || MenuUP.farmMapId<0 || GameCanvas.loadmap.idMap==MenuUP.farmMapId);
     }
     private static void area(int area) {
+        approachingArea=true;
+        if(!GoBackNavigator.approachAreaSign()) {
+            if(MenuUP.isAutoAttack) Player.isAutoFire=-1;
+            status=GoBackNavigator.status;return;
+        }
+        approachingArea=false;
         requestedArea=area; requestMap=GameCanvas.loadmap.idMap; deadline=now()+15000L;
         paidKind=-1; awaitingConfirm=false;
-        send(51,area,-1,-1);
-        status="Chờ vào khu " +(area+1);
+        waitingAreas=true;selectingArea=false;
+        send(54,0,0,0);
+        status="Đang lấy danh sách khu";
+    }
+    public static synchronized boolean areaMenu(mVector options) {
+        if(!zoneEnabled || !waitingAreas || requestedArea<0 || now()>=deadline
+                || !farming() || requestMap!=GameCanvas.loadmap.idMap) return false;
+        if(options==null || requestedArea>=options.size()) {
+            resetRequest();manualPause=true;status="Map không có khu đã chọn";return false;
+        }
+        waitingAreas=false;selectingArea=true;deadline=now()+15000L;
+        return true;
     }
     private static void send(int command,int a,int b,int c) {
         Message message=new Message(command);
         try {
             if(command==-30) {message.writer().writeShort(a);message.writer().writeByte(b);message.writer().writeByte(c);}
             else if(command==51) message.writer().writeByte(a);
-            else message.writer().writeShort(a);
+            else if(command!=54) message.writer().writeShort(a);
             Session_ME.gI().sendMessage(message);
         } catch(Exception e) {status="Không gửi được lệnh; đã tạm dừng";manualPause=true;resetRequest();}
         finally {message.cleanup();}
@@ -120,7 +151,12 @@ public final class AutoFarmSupport {
         load();
         // Loading/death/dialog transitions do not prove whether a paid request
         // completed. Keep it pending until arrival, refusal, or timeout.
-        if(!farming()) return;
+        if(!farming()) {
+            approachingArea=false;
+            if(zoneEnabled || fireEnabled || oilEnabled || bookEnabled)
+                status="Chờ auto đánh quái tại map UP";
+            return;
+        }
         long time=now();
         if(requestedArea>=0 && requestMap!=GameCanvas.loadmap.idMap) {
             if(paidKind>=0) {manualPause=true;status="Đổi map khi đang trả phí; kiểm tra rồi bật lại";}
@@ -128,6 +164,11 @@ public final class AutoFarmSupport {
         }
         if(requestedArea>=0 && LoadMap.Area==requestedArea) {
             status="Đang UP khu "+(LoadMap.Area+1); resetRequest(); gemFallback=false;
+        }
+        if(selectingArea && requestedArea>=0 && time<deadline) {
+            selectingArea=false;
+            GameCanvas.end_Dialog();GameCanvas.menu2.doCloseMenu();
+            send(51,requestedArea,-1,-1);status="Chờ vào khu "+(requestedArea+1);return;
         }
         if(queuedCommand!=null || queuedIndex>=0) {
             if(requestedArea<0 || time>deadline) {resetRequest();return;}
@@ -146,11 +187,8 @@ public final class AutoFarmSupport {
                     : failedFallback ? "Khu dự phòng không phản hồi; đã tạm dừng" : "Khu 2 không phản hồi; dùng khu dự phòng";
             } else return;
         }
-        if(manualPause || GameCanvas.currentDialog!=null || GameCanvas.menu2.isShowMenu) return;
-        // An explicit GoBack location owns the area as well as map/coordinates.
-        // Do not move away again immediately after a successful return.
-        if(zoneEnabled && !(MenuUP.isGoBackEnabled && MenuUP.farmArea>=0
-                && MenuUP.farmMapId==GameCanvas.loadmap.idMap)) {
+        if(GameCanvas.currentDialog!=null || GameCanvas.menu2.isShowMenu) return;
+        if(zoneEnabled && !manualPause) {
             int target=blockedDay==day() || time<retryAt ? fallback : 1;
             if(LoadMap.Area!=target) {
                 if(target!=1 && time<retryAt-570000L) return;
@@ -162,26 +200,32 @@ public final class AutoFarmSupport {
 
     private static void useConsumables(long time) {
         if(pendingUse>=0) {
-            int slot=pendingUse;Item item=Item.getItemInventory(cats[slot],(short)ids[slot]);
+            int slot=pendingUse;Item item=Item.getItemInventory(pendingCat,(short)pendingId);
             if(item==null || item.numPotion<pendingCount) {
-                if(slot==0) {fireUntil=nextUse[0];fireMap=pendingMap;fireArea=pendingArea;}
+                if(slot==0) {fireUntil=nextUse[0];fireMap=pendingMap;fireArea=pendingArea;oilsUsed=0;nextUse[1]=0;}
                 pendingUse=-1;save();status="Đã dùng "+itemName(slot);
             } else if(time>=consumableDeadline) {
                 if(slot==0) fireEnabled=false; else if(slot==1) oilEnabled=false; else bookEnabled=false;
+                nextUse[slot]=0;
                 pendingUse=-1;save();status="Chưa xác nhận dùng vật phẩm; đã tắt mục đó";
             }
             return;
         }
         for(int i=0;i<3;i++) {
             if(!(i==0?fireEnabled:i==1?oilEnabled:bookEnabled) || time<nextUse[i]) continue;
-            if(i==1 && (time>=fireUntil || fireMap!=GameCanvas.loadmap.idMap || fireArea!=LoadMap.Area)) continue;
+            if(i==1 && oilsUsed>=3) continue;
+            if(i==1 && (time>=fireUntil || fireMap!=GameCanvas.loadmap.idMap || fireArea!=LoadMap.Area)) {
+                status="Bình dầu: chờ đốt lửa thành công tại khu này";continue;
+            }
             Item item=findItem(i);
             if(item==null || item.numPotion<=0) {nextUse[i]=time+1000L;status="Chưa có "+itemName(i);continue;}
             if(item.ItemCatagory!=4 && item.ItemCatagory!=7) continue;
             // Native inventory uses command 32 for potions, -107 for materials.
             pendingUse=i;pendingCount=item.numPotion;consumableDeadline=time+15000L;
+            pendingId=item.Id;pendingCat=item.ItemCatagory;
             pendingMap=GameCanvas.loadmap.idMap;pendingArea=LoadMap.Area;
-            nextUse[i]=time+(long)(i==0?fireMinutes:i==1?oilMinutes:bookMinutes)*60000L;
+            nextUse[i]=time+(i==0?3600000L:i==1?2000L:7200000L);
+            if(i==1)oilsUsed++; // Persist the attempt before sending; never exceed three per fire.
             save();send(item.ItemCatagory==4?32:-107,item.Id,-1,-1);
             status="Chờ dùng "+itemName(i);return;
         }
@@ -190,11 +234,12 @@ public final class AutoFarmSupport {
     private static String itemName(int slot) {return slot==0?"Lửa thiêng":slot==1?"Bình dầu":"Sách tri thức";}
     private static Item findItem(int slot) {
         Item chosen=Item.getItemInventory(cats[slot],(short)ids[slot]);
-        if(chosen!=null && chosen.numPotion>0) return chosen;
-        String expected=clean(itemName(slot));
+        if(chosen!=null && chosen.numPotion>0 && (chosen.ItemCatagory==4 || chosen.ItemCatagory==7)
+                && clean(chosen.itemName).trim().equals(clean(itemName(slot)))) return chosen;
+        String expected=clean(itemName(slot)).trim();
         for(int i=0;i<Item.VecInvetoryPlayer.size();i++) {
             Item item=(Item)Item.VecInvetoryPlayer.elementAt(i);
-            if((item.ItemCatagory==4 || item.ItemCatagory==7) && item.numPotion>0 && clean(item.itemName).equals(expected)) {
+            if((item.ItemCatagory==4 || item.ItemCatagory==7) && item.numPotion>0 && clean(item.itemName).trim().equals(expected)) {
                 ids[slot]=item.Id;cats[slot]=item.ItemCatagory;return item;
             }
         }
@@ -215,7 +260,7 @@ public final class AutoFarmSupport {
             || has(s,"toi da") || has(s,"gioi han") || has(s,"khong the vao") || has(s,"khu day") || has(s,"bi khoa");
     }
     private static boolean relevant() {
-        return zoneEnabled && requestedArea==1 && now()<deadline && farming()
+        return zoneEnabled && requestedArea==1 && !waitingAreas && !selectingArea && now()<deadline && farming()
             && requestMap==GameCanvas.loadmap.idMap;
     }
     private static boolean reject(String s) {
@@ -233,6 +278,19 @@ public final class AutoFarmSupport {
         return true;
     }
     // Never choose a payment by a hard-coded index; use server-provided captions.
+    private static boolean nativePaymentMenu(String title,mVector options) {
+        // The server's zone-entry menu has no zone name in its title.
+        // Match its exact pair only while relevant() confirms our own request.
+        if(!clean(title).trim().equals("menu") || options==null || options.size()!=2) return false;
+        boolean useTicket=false,useTurn=false;
+        for(int i=0;i<options.size();i++) {
+            String label=clean(((iCommand)options.elementAt(i)).caption).trim();
+            if(label.equals("su dung ve")) useTicket=true;
+            else if(label.equals("su dung luot")) useTurn=true;
+            else return false;
+        }
+        return useTicket && useTurn;
+    }
     public static int paymentChoice(String text,mVector options) {
         int tickets=-1,gems=-1;
         if(options==null) return -1;
@@ -247,9 +305,14 @@ public final class AutoFarmSupport {
     }
     public static synchronized boolean dialog(String text,mVector options) {
         load();
-        if(!relevant()) return false;
         String s=clean(text);
-        if(!zoneText(s) && !(refusal(s) && (has(s,"6 gio") || has(s,"6 tieng")
+        if(pendingUse==1 && (options==null || options.size()<=1)
+                && (has(s,"khong the cham them") || has(s,"khong the them dau")
+                    || has(s,"khong the cham dau") || has(s,"da cham toi da"))) {
+            oilsUsed=3;pendingUse=-1;save();status="Lửa đã đủ dầu";return true;
+        }
+        if(!relevant()) return false;
+        if(!zoneText(s) && !nativePaymentMenu(text,options) && !(refusal(s) && (has(s,"6 gio") || has(s,"6 tieng")
                 || paidKind==1 && ticket(s)))) return false;
         if(reject(s)) return true;
         int index=paymentChoice(s,options);
@@ -274,7 +337,7 @@ public final class AutoFarmSupport {
         if(!relevant()) return false;
         String s=clean(title);String context=s;
         for(int i=0;i<options.size();i++) context+=" "+clean(((iCommand)options.elementAt(i)).caption);
-        if(!zoneText(context)) return false;
+        if(!zoneText(context) && !nativePaymentMenu(title,options)) return false;
         if(reject(s)) return true;
         if(paidKind>=0) return false;
         int index=paymentChoice(s,options);
@@ -293,20 +356,21 @@ public final class AutoFarmSupport {
     public static void show() {
         load();mVector menu=new mVector("Ho tro UP");
         menu.addElement(new iCommand("UP khu 2: "+(zoneEnabled?"Bật":"Tắt"),new IAction(){public void perform(){
-            zoneEnabled=!zoneEnabled;manualPause=false;gemFallback=false;resetRequest();retryAt=0;save();show();}}));
+            zoneEnabled=!zoneEnabled;manualPause=false;gemFallback=false;resetRequest();retryAt=0;save();
+            if(zoneEnabled) {
+                status="Đã bật khu 2; chờ auto đánh quái tại map UP";
+                GameCanvas.menu2.doCloseMenu();update();GameCanvas.addInfoCharCline(status);
+            } else show();}}));
         menu.addElement(new iCommand("Trả phí: "+paymentName(),new IAction(){public void perform(){
             payment=(payment+1)%3;resetRequest();manualPause=false;save();show();}}));
         menu.addElement(new iCommand("Khu dự phòng: "+(fallback+1),new IAction(){public void perform(){showAreas();}}));
         menu.addElement(new iCommand("Đốt lửa: "+(fireEnabled?"Bật":"Tắt"),new IAction(){public void perform(){
             fireEnabled=!fireEnabled;save();show();}}));
-        menu.addElement(new iCommand("Vật phẩm lửa / "+fireMinutes+" phút >",new IAction(){public void perform(){showItem(0);}}));
         menu.addElement(new iCommand("Bình dầu: "+(oilEnabled?"Bật":"Tắt"),new IAction(){public void perform(){
             oilEnabled=!oilEnabled;save();show();}}));
-        menu.addElement(new iCommand("Vật phẩm dầu / "+oilMinutes+" phút >",new IAction(){public void perform(){showItem(1);}}));
         menu.addElement(new iCommand("Sách tri thức: "+(bookEnabled?"Bật":"Tắt"),new IAction(){public void perform(){
             bookEnabled=!bookEnabled;save();show();}}));
-        menu.addElement(new iCommand("Sách / "+bookMinutes+" phút >",new IAction(){public void perform(){showItem(2);}}));
-        menu.addElement(new iCommand(status,new IAction(){public void perform(){show();}}));
+        if(status.length()>0)menu.addElement(new iCommand(status,new IAction(){public void perform(){show();}}));
         menu.addElement(new iCommand("Quay lại",new IAction(){public void perform(){MenuUP.showMenu();}}));
         GameCanvas.menu2.startAt(menu,2,"HỖ TRỢ UP",false,null);
     }
@@ -317,25 +381,5 @@ public final class AutoFarmSupport {
             menu.addElement(new iCommand("Khu "+(i+1),new IAction(){public void perform(){fallback=area;save();show();}}));}
         menu.addElement(new iCommand("Quay lại",new IAction(){public void perform(){show();}}));
         GameCanvas.menu2.startAt(menu,2,"KHU DỰ PHÒNG",false,null);
-    }
-    private static void showItem(final int slot) {
-        mVector menu=new mVector("Vat pham");
-        menu.addElement(new iCommand("Chu kỳ sử dụng >",new IAction(){public void perform(){showIntervals(slot);}}));
-        for(int i=0;i<Item.VecInvetoryPlayer.size();i++) {
-            final Item item=(Item)Item.VecInvetoryPlayer.elementAt(i);
-            if((item.ItemCatagory!=4 && item.ItemCatagory!=7) || item.numPotion<=0)continue;
-            menu.addElement(new iCommand((ids[slot]==item.Id && cats[slot]==item.ItemCatagory?"[Chọn] ":"")+item.itemName,
-                new IAction(){public void perform(){ids[slot]=item.Id;cats[slot]=item.ItemCatagory;save();show();}}));
-        }
-        menu.addElement(new iCommand("Quay lại",new IAction(){public void perform(){show();}}));
-        GameCanvas.menu2.startAt(menu,2,"CHỌN "+itemName(slot).toUpperCase(),false,null);
-    }
-    private static void showIntervals(final int slot) {
-        mVector menu=new mVector("Chu ky");int[] times={1,5,10,15,30,60,120};
-        for(int i=0;i<times.length;i++){final int minutes=times[i];
-            menu.addElement(new iCommand(minutes+" phút",new IAction(){public void perform(){
-                if(slot==0)fireMinutes=minutes;else if(slot==1)oilMinutes=minutes;else bookMinutes=minutes;save();showItem(slot);}}));}
-        menu.addElement(new iCommand("Quay lại",new IAction(){public void perform(){showItem(slot);}}));
-        GameCanvas.menu2.startAt(menu,2,"CHU KỲ THEO THỜI HẠN VẬT PHẨM",false,null);
     }
 }

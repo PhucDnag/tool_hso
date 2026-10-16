@@ -524,6 +524,7 @@ extends MainObject {
         for (n = 0; n < GameScreen.Vecplayers.size(); ++n) {
             MainObject mainObject = (MainObject)GameScreen.Vecplayers.elementAt(n);
             if (mainObject == null || mainObject.isSend || mainObject.typeObject != 4 && mainObject.typeObject != 3 && mainObject.typeObject != 5 && mainObject.typeObject != 7) continue;
+            if (mainObject.typeObject == 3) continue; // Equipment pickup is owned by AutoLoot.
             if (this.setGetItem(mainObject) && MainObject.getDistance(this.x, this.y, mainObject.x, mainObject.y) < this.wFocus) {
                 GlobalService.gI().Get_Item_Map((short)mainObject.ID, mainObject.typeObject);
             }

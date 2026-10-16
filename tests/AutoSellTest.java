@@ -37,14 +37,14 @@ public class AutoSellTest {
 
         // 1. Basic White and Green equipment
         MainItem white = makeItem(1, "Ao Vai", 3, 0, (byte)0, (byte)0);
-        MainItem green = makeItem(2, "Kiem Sat", 3, 1, (byte)0, (byte)0);
-        MainItem blue = makeItem(3, "Nhan Bac", 3, 2, (byte)0, (byte)0);
-        MainItem gold = makeItem(4, "Vu Khi Vang", 3, 3, (byte)0, (byte)0);
-        MainItem purple = makeItem(5, "Vu Khi Tim", 3, 4, (byte)0, (byte)0);
-        MainItem orange = makeItem(6, "Vu Khi Cam", 3, 5, (byte)0, (byte)0);
+        MainItem green = makeItem(2, "Kiem Sat", 3, 5, (byte)0, (byte)0);
+        MainItem blue = makeItem(3, "Nhan Bac", 3, 1, (byte)0, (byte)0);
+        MainItem gold = makeItem(4, "Vu Khi Vang", 3, 2, (byte)0, (byte)0);
+        MainItem purple = makeItem(5, "Vu Khi Tim", 3, 3, (byte)0, (byte)0);
+        MainItem orange = makeItem(6, "Vu Khi Cam", 3, 4, (byte)0, (byte)0);
 
         check(AutoSellManager.isTrashItem(white), "White equip should be trash by default");
-        check(AutoSellManager.isTrashItem(green), "Green equip should be trash by default");
+        check(!AutoSellManager.isTrashItem(green), "Green excluded even with legacy green flag enabled");
         check(!AutoSellManager.isTrashItem(blue), "Blue equip should NOT be trash when isSellBlue is false");
         check(!AutoSellManager.isTrashItem(gold), "Gold equip should NOT be trash when isSellYellow is false");
         check(!AutoSellManager.isTrashItem(purple), "Purple equip should NOT be trash when isSellPurple is false");
@@ -139,7 +139,7 @@ public class AutoSellTest {
         AutoSellManager.isAutoSellEnabled = true;
         AutoSellManager.isSellWhite = true;
         AutoSellManager.isSellGreen = true;
-        AutoSellManager.isSellBlue = false;
+        AutoSellManager.isSellBlue = true;
         AutoSellManager.isSellYellow = false;
         AutoSellManager.isSellPurple = false;
         AutoSellManager.isSellOrange = false;
@@ -185,7 +185,7 @@ public class AutoSellTest {
         check(AutoSellManager.getQueueCount() == 2, "Queue should still have 2 items");
 
         // Next tick at now = 11050 (> 1000ms elapsed): second item sold
-        mSystem.now = 11050;
+        mSystem.now = 12000;
         Item.VecInvetoryPlayer.removeElement(item1);
         AutoSellManager.update();
         check(GlobalService.sellPackets == 2, "Second item should be sold after 1050ms");
@@ -193,7 +193,7 @@ public class AutoSellTest {
         check(AutoSellManager.getQueueCount() == 1, "Queue should now have 1 item");
 
         // Next tick at now = 12100 (> 1000ms): third item sold
-        mSystem.now = 12100;
+        mSystem.now = 14000;
         Item.VecInvetoryPlayer.removeElement(item2);
         AutoSellManager.update();
         check(GlobalService.sellPackets == 3, "Third item should be sold");
@@ -231,7 +231,7 @@ public class AutoSellTest {
         // Update khi ở xa NPC: KHÔNG ĐƯỢC BÁN!
         AutoSellManager.update();
         check(GlobalService.sellPackets == 0, "Must NEVER sell items when far from NPC (anti-ban protection)");
-        check(GameScreen.player.toX == 472, "Player should move towards NPC");
+        check(GoBackNavigator.approached!=null && GoBackNavigator.approached.x==500, "selling delegates NPC approach to collision-aware navigator");
 
         // Giả lập player đã bước đến cạnh NPC (x=480, y=500 -> cách 20px <= 45px)
         GameScreen.player.x = 480;
@@ -283,7 +283,20 @@ public class AutoSellTest {
         AutoSellManager.update();
 
         check(AutoSellManager.isReturningToSell, "isReturningToSell must be true when bag full outside village");
-        check(MenuUP.isWaitingReconnect, "Must trigger reconnect/relog to return to village safely");
+        check(!MenuUP.isWaitingReconnect && GoBackNavigator.updates>0, "start walking instead of relog");
+        int count=GoBackNavigator.updates;
+        mSystem.now+=100;AutoSellManager.update();
+        check(GoBackNavigator.updates>count,"continue routing on later ticks");
+        AutoSellManager.resetSession();AutoSellManager.returnMethod=1;
+        mSystem.now+=3000;count=GoBackNavigator.updates;AutoSellManager.update();
+        check(GoBackNavigator.updates>count,"missing recall falls back to routing");
+        AutoSellManager.resetSession();
+        MainItem recall=makeItem(999,"bua ve lang",4,0,(byte)0,(byte)0);recall.numPotion=1;
+        Item.VecInvetoryPlayer.addElement(recall);mSystem.now+=3000;
+        count=GoBackNavigator.updates;int sent=GlobalService.recalls;AutoSellManager.update();
+        check(GlobalService.recalls==sent+1 && GoBackNavigator.updates==count,"use recall once and wait before walking");
+        mSystem.now+=100;AutoSellManager.update();check(GlobalService.recalls==sent+1,"no repeated recall while waiting");
+        mSystem.now+=16000;AutoSellManager.update();check(GoBackNavigator.updates>count,"unconfirmed recall falls back after timeout");
     }
 
     static void testSellConfirmationDialogHandling() {
@@ -329,19 +342,8 @@ public class AutoSellTest {
     }
 
     static void testDelayConfiguration() {
-        AutoSellManager.delaySellMs = 1000L;
-        AutoSellManager.cycleDelaySell();
-        check(AutoSellManager.delaySellMs == 1200L, "cycleDelaySell from 1000 to 1200");
-        AutoSellManager.cycleDelaySell();
-        check(AutoSellManager.delaySellMs == 1500L, "cycleDelaySell from 1200 to 1500");
-        AutoSellManager.cycleDelaySell();
-        check(AutoSellManager.delaySellMs == 2000L, "cycleDelaySell from 1500 to 2000");
-        AutoSellManager.cycleDelaySell();
-        check(AutoSellManager.delaySellMs == 2500L, "cycleDelaySell from 2000 to 2500");
-        AutoSellManager.cycleDelaySell();
-        check(AutoSellManager.delaySellMs == 3000L, "cycleDelaySell from 2500 to 3000");
-        AutoSellManager.cycleDelaySell();
-        check(AutoSellManager.delaySellMs == 1000L, "cycleDelaySell from 3000 to 1000");
+        AutoSellManager.delaySellMs=1000L;AutoSellManager.cycleDelaySell();
+        check(AutoSellManager.delaySellMs==2000L,"sell delay fixed to two seconds");
     }
 
     static void testReturnMethodConfiguration() {

@@ -41,11 +41,13 @@ public int getVmount(){return 0;}
 public void dofire_(){isAutoFire=1;isCurAutoFire=true;} public void nextMonster(){} public void setAutoFire(){} }""",
 'GameObjects/MainObject.java': """package GameObjects; import GameScreen.GameScreen;
 public class MainObject { public int x=36,y=36,hp=100,Action,ID,typeObject,Lv; public String name="", nameGiaotiep="";
-public int getIDnpc(){return ID;}
+public boolean isInfo,isRemove,useShip;public int typeBoss;public int getIDnpc(){return ID;}
 public void GiaoTiep(){}
 public static int getDistance(int x,int y,int a,int b){return (int)Math.sqrt((x-a)*(x-a)+(y-b)*(y-b));}
 public static MainObject get_Object(int id,byte type){for(int i=0;i<GameScreen.Vecplayers.size();i++){
 MainObject o=(MainObject)GameScreen.Vecplayers.elementAt(i);if(o.ID==id&&o.typeObject==type)return o;}return null;} }""",
+'GameScreen/ShipScr.java': 'package GameScreen;public class ShipScr {public boolean isSpeed;public Object center=new Object();}',
+'GameObjects/MainMonster.java': 'package GameObjects;public class MainMonster extends MainObject {public int typeMonster;public String nameowner="";public boolean isBossNew(){return false;}}',
 'Thread_More/LoadMap.java': """package Thread_More; import CLib.*;
 public class LoadMap { public static int wTile=24; public static byte Area;
 public static mVector vecPointChange=new mVector(); public int idMap,mapW=10,mapH=10;
@@ -64,7 +66,7 @@ public static byte[] loadRMS(String k){return (byte[])rms.get(k);} public static
 'InterfaceComponents/iCommand.java': 'package InterfaceComponents; public class iCommand { public String caption; public iCommand(String s){caption=s;} }',
 'netcommand/global/GlobalService.java': """package netcommand.global; import GameObjects.*; import CLib.*; import InterfaceComponents.*;
 public class GlobalService {static GlobalService s=new GlobalService(); public static int changes,lastIndex=-1,requests,moves; public static boolean rejectArea;
-public static GlobalService gI(){return s;}
+public static int boosts;public void useShip(byte mode){if(mode==2)boosts++;}public static GlobalService gI(){return s;}
 public static int homes,homeMode=-1;public void gohome(byte mode){homes++;homeMode=mode;}
 public void Request_Area(){}
 public void Change_Area(byte a){changes++;if(!rejectArea)Thread_More.LoadMap.Area=a;}
@@ -80,7 +82,7 @@ public void Dynamic_Menu(short id,byte menu,byte index){lastIndex=index;}
 methods = '\n'.join(method(n) for n in ('stripAccents','isVillage','getMapName','getMapIdByName','farmAreaLabel',
     'isHorseId','isMountKeyword','findMountItem',
     'shouldAutoRevive','updateAutoRevive',
-    'rememberFarmLocation','beginGoBack','updateGoBack','saveCurrentFarmLocation'))
+    'rememberFarmLocation','beginGoBack','updateGoBack','saveCurrentFarmLocation','setFarmMap'))
 stubs['GameObjects/MenuUP.java'] = """package GameObjects;
 import CLib.*; import GameScreen.*; import Main.*; import Model.*; import Thread_More.*; import netcommand.global.GlobalService;
 public class MenuUP {
@@ -92,7 +94,7 @@ public static boolean isReviveCancelled,isCheckingGoldRevive;
 public static long timeTargetRevive,timeSentRevive;
 public static boolean hasReviveItem(){return false;}public static String getReviveItemName(){return "";}
 public static void tickRevive(){if(shouldAutoRevive())updateAutoRevive();}
-private static long lastFarmSaveTime;private static boolean farmLocationDirty,resumeNativeAutoFire;
+private static long lastFarmSaveTime;private static boolean farmLocationDirty,resumeNativeAutoFire,goBackTraveled;
 public static void saveConfig(){saves++;}
 private static void stopGoBackMovement(){GoBackNavigator.stop();}
 public static void tick(){GoBackNavigator.observe();rememberFarmLocation();updateGoBack();}

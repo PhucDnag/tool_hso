@@ -5,6 +5,52 @@ package GameObjects;
  * Java ME CLDC-1.1 / Java 1.4 compatible.
  */
 public final class GoBackAtlas {
+    // Daily bosses supplied by the player; independent of observed normal-monster ranges.
+    private static final int[] DAILY_MAPS={6,10,14,18,28,32,47,92};
+    private static final int[] DAILY_LEVELS={10,20,30,40,50,50,70,124};
+    private static final String[] DAILY_NAMES={"Cây Quái Vật","Ong Khổng Lồ","Thủy Quái","Sói Bất Tử",
+        "Guardian","Xác ướp ngàn năm","Quái vật đầu bò","Ice Golem"};
+    public static String dailyBossName(int mapId){
+        for(int i=0;i<DAILY_MAPS.length;i++)if(DAILY_MAPS[i]==mapId)return DAILY_NAMES[i];
+        return "";
+    }
+    public static int dailyBossLevel(int mapId){
+        for(int i=0;i<DAILY_MAPS.length;i++)if(DAILY_MAPS[i]==mapId)return DAILY_LEVELS[i];
+        return 0;
+    }
+    public static String mapRole(int id){
+        if(id==2)return "Đổi thú cưỡi";
+        if(id==50)return "Quản lý chuồng thú";
+        if(id==36 || id==46 || id==87)return "Khu PK";
+        if(id==1 || id==33 || id==67 || id==93)return "Làng";
+        return "";
+    }
+    public static boolean listMap(GoBackRoutes.Node n){
+        return n.mapId>=0 && n.mapId!=62 && n.mapId!=46 && n.mapId!=87
+            && (mapRole(n.mapId).length()>0 || dailyBossLevel(n.mapId)>0
+            || n.mapId==25 || (!n.village && (n.scanned || n.maxLevel>0)));
+    }
+    public static int listLevel(GoBackRoutes.Node n){
+        if(mapRole(n.mapId).length()>0)return 10000;
+        if(n.mapId==25)return 41;
+        int boss=dailyBossLevel(n.mapId);
+        return boss>0?boss:n.minLevel>0?n.minLevel:9999;
+    }
+    public static String listLabel(GoBackRoutes.Node n,String name){
+        String role=mapRole(n.mapId);
+        if(role.length()>0)return name+" ("+role+")";
+        int boss=dailyBossLevel(n.mapId);
+        if(boss>0)return name+" ("+dailyBossName(n.mapId)+" Lv "+boss+")";
+        if(n.mapId==25)return name+" (Lv 41-44)";
+        return name+(n.maxLevel>0?" (Lv "+n.minLevel+(n.minLevel==n.maxLevel?"":"-"+n.maxLevel)+")":" (Chưa có dữ liệu quái)");
+    }
+    public static boolean reportedBadRange(String name,int min,int max){
+        if(min!=1 || max<=1)return false;
+        String key=MenuUP.stripAccents(name).trim();
+        return key.equals("bo bien") || key.equals("deo bang gia") || key.equals("rung hoa do")
+            || key.equals("me cung") || key.equals("me cung tang 1") || key.equals("me cung tang 2")
+            || key.equals("vach da cheo leo") || key.equals("rung chet");
+    }
     public static final String[] MAP_NAMES = new String[]{
         "Ng\u00f4i L\u00e0ng Nh\u1ecf",
         "L\u00e0ng S\u00f3i Tr\u1eafng",
@@ -251,8 +297,33 @@ public final class GoBackAtlas {
         return 0;
     }
 
+    public static boolean isStoneDestination(int mapId) {
+        if (mapId < 0) return false;
+        switch (mapId) {
+            case 0:  // Ngôi Làng Nhỏ
+            case 1:  // Làng Sói Trắng
+            case 12: // Vực Đá (test stub)
+            case 13: // Rặng Đá Ngầm (test stub)
+            case 33: // Thành Phố Kho Báu
+            case 36: // Đấu Trường
+            case 45: // Đấu Trường
+            case 54: // Làng ánh sáng
+            case 56: // Làng gió
+            case 58: // Làng sét
+            case 60: // Làng lửa
+            case 67: // Thành phố cảng
+            case 82: // Khu mua bán
+            case 87: // Đấu trường
+            case 91: // Khu mua bán
+            case 93: // Thị trấn mùa đông
+                return true;
+            default:
+                return false;
+        }
+    }
+
     public static boolean isTeleportable(int mapId) {
-        return getCategoryForMap(mapId) > 0;
+        return isStoneDestination(mapId);
     }
 
     public static boolean matchesCategory(String label, int cat) {
@@ -374,6 +445,37 @@ public final class GoBackAtlas {
         }
     }
 
+    // Repair missing remote hints only for an explicit map-list trip. The current
+    // map always uses real portal coordinates; arrival rescans each next map.
+    public static void repairRemoteLinks(GoBackRoutes graph,int current){
+        for(int id=0;id<MAP_LINKS.length;id++){
+            if(MAP_LINKS[id]==null)continue;
+            int from=graph.byName(MenuUP.stripAccents(MAP_NAMES[id]));
+            if(from<0 || from==current)continue;
+            for(int j=0;j<MAP_LINKS[id].length;j++){
+                int dest=MAP_LINKS[id][j];
+                int to=graph.byName(MenuUP.stripAccents(MAP_NAMES[dest]));
+                if(to<0 || to==from)continue;
+                boolean exists=false;
+                for(int k=0;k<graph.get(from).exits.size();k++){
+                    GoBackRoutes.Exit e=(GoBackRoutes.Exit)graph.get(from).exits.elementAt(k);
+                    if(e.to==to){exists=true;break;}
+                }
+                if(!exists)graph.exit(from,to,-1,-1,-1);
+            }
+        }
+    }
+    public static boolean sameLand(int from,int to){
+        if(from<0 || to<0 || from>=MAP_LINKS.length || to>=MAP_LINKS.length)return false;
+        boolean[] seen=new boolean[MAP_LINKS.length];int[] queue=new int[MAP_LINKS.length];
+        int head=0,tail=0;queue[tail++]=from;seen[from]=true;
+        while(head<tail){int id=queue[head++];if(id==to)return true;
+            if(MAP_LINKS[id]==null)continue;
+            for(int i=0;i<MAP_LINKS[id].length;i++){int next=MAP_LINKS[id][i];
+                if(!seen[next]){seen[next]=true;queue[tail++]=next;}}
+        }
+        return false;
+    }
     public static void seed(GoBackRoutes graph) {
         int[] nodes = new int[MAP_NAMES.length];
         for (int i = 0; i < MAP_NAMES.length; i++) {

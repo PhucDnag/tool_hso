@@ -185,12 +185,6 @@ public class AutoChat {
                 startInputDelay();
             }
         }));
-        mVector2.addElement(new iCommand("Th\u00f4ng tin [HONG PHUC]", new IAction(){
-
-            public void perform() {
-                showInfo();
-            }
-        }));
         GameCanvas.menu2.startAt(mVector2, 2, "HONG PHUC HSO", false, null);
     }
 
@@ -239,16 +233,9 @@ public class AutoChat {
     }
 
     public static void showInfo() {
-        String string = isAutoChat ? "B\u1eacT" : "T\u1eaeT";
-        String sRand = isRandomPrefix ? "B\u1eacT" : "T\u1eaeT";
-        String string2 = "=== HONG PHUC HSO ===\n" +
-                         "B\u1ea3n quy\u1ec1n: HONG PHUC HSO\n" +
-                         "Tool: Auto Chat v1.0\n" +
-                         "Tr\u1ea1ng th\u00e1i: " + string + "\n" +
-                         "Th\u1eddi gian: " + delayChat + " gi\u00e2y\n" +
-                         "S\u1ed1 ch\u1ed1ng spam: " + sRand + "\n" +
-                         "\u0110\u00e3 g\u1eedi: " + countSent + " tin\n" +
-                         "N\u1ed9i dung: " + strChat;
+        String string2 = "Bản quyền: HONG PHUC HSO\n" +
+                         "Tool v1.0\n" +
+                         "Chúc các bạn chơi game vui vẻ!";
         MsgDialog msgDialog = new MsgDialog();
         msgDialog.setinfo(string2, new iCommand("\u0110\u00f3ng", new IAction(){
 

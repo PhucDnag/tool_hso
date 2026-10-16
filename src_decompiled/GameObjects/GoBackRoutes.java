@@ -14,7 +14,7 @@ public final class GoBackRoutes {
     }
     public static final class Exit {
         public int from, to, x, y, npc = -1;
-        public boolean confirmed, blocked;
+        public boolean confirmed, blocked, unavailable;
         // Walking distance is local/transient, never used as an invented remote cost.
         public int localCost;
         public long retryAt;
@@ -74,7 +74,7 @@ public final class GoBackRoutes {
         Node n=get(from);
         for(int i=0;i<n.exits.size();i++) {
             Exit e=(Exit)n.exits.elementAt(i);
-            if(e.npc==npc && (npc==-1 ? e.x==x && e.y==y : e.to==to)) {
+            if(e.npc==npc && (npc==-1 ? e.x==x && e.y==y && (x>=0 && y>=0 || e.to==to) : e.to==to)) {
                 e.x=x; e.y=y;
                 if(!e.confirmed && e.to!=to) { e.to=to; revision++; }
                 return e;
@@ -148,7 +148,7 @@ public final class GoBackRoutes {
     public void resetFailures() {
         for(int i=0;i<nodes.size();i++) for(int j=0;j<get(i).exits.size();j++) {
             Exit e=(Exit)get(i).exits.elementAt(j);
-            e.blocked=false; e.retryAt=0L; e.timeouts=0;
+            e.blocked=false; e.unavailable=false; e.retryAt=0L; e.timeouts=0;
         }
         revision++;
     }
@@ -175,6 +175,22 @@ public final class GoBackRoutes {
     public Plan planWalking(int start,int goal,java.util.Hashtable visited) {
         return plan(start,goal,visited,true,false);
     }
+    /** Local stone first; rank landings by the remaining walking route. */
+    public Plan planStoneFirst(int start,int goal,java.util.Hashtable visited) {
+        if(start<0 || goal<0 || start==goal)return null;
+        Exit best=null;int hops=2147483647;
+        Node n=get(start);
+        for(int i=0;i<n.exits.size();i++){
+            Exit e=(Exit)n.exits.elementAt(i);
+            if(e.npc==-1 || e.blocked || e.unavailable || e.to==start)continue;
+            if(e.to!=goal && visited!=null && visited.containsKey(new Integer(e.to)))continue;
+            Plan rest=e.to==goal?null:planWalking(e.to,goal,visited);
+            if(e.to!=goal && rest==null)continue;
+            int cost=e.to==goal?1:rest.hops+1;
+            if(cost<hops || cost==hops && best!=null && e.localCost<best.localCost){best=e;hops=cost;}
+        }
+        return best==null?null:new Plan(best,hops);
+    }
     private Plan plan(int start,int goal,java.util.Hashtable visited,boolean returning,boolean localStone) {
         if(start<0 || start>=nodes.size() || goal<0 || goal>=nodes.size() || goal==start) return null;
         int ceiling=GoBackAtlas.getCategoryForMap(get(goal).mapId);
@@ -192,7 +208,7 @@ public final class GoBackRoutes {
             // before a node is dequeued, so tie improvements propagate to its children.
             for(int j=0;j<n.exits.size();j++) {
                 Exit e=(Exit)n.exits.elementAt(j);
-                if(e.blocked || e.to==start) continue;
+                if(e.blocked || e.unavailable || e.to==start) continue;
                 if(returning) {
                     if(e.npc!=-1 && (!localStone || u!=start)) continue;
                     if(e.to!=goal && visited!=null && visited.containsKey(new Integer(e.to))) continue;
@@ -220,7 +236,7 @@ public final class GoBackRoutes {
     public byte[] save() throws IOException {
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();
         DataOutputStream out=new DataOutputStream(bytes);
-        out.writeInt(2); out.writeInt(nodes.size());
+        out.writeInt(5); out.writeInt(nodes.size());
         for(int i=0;i<nodes.size();i++) {
             Node n=get(i); out.writeUTF(n.key); out.writeInt(n.mapId);
             out.writeBoolean(n.scanned); out.writeBoolean(n.village);
@@ -236,12 +252,20 @@ public final class GoBackRoutes {
         GoBackRoutes graph=new GoBackRoutes();
         if(bytes==null) return graph;
         DataInputStream in=new DataInputStream(new ByteArrayInputStream(bytes));
-        if(in.readInt()!=2) throw new IOException("route version");
+        int version=in.readInt();
+        if(version<2 || version>5) throw new IOException("route version");
         int count=in.readInt();
         if(count<0 || count>4096) throw new IOException("route count");
         for(int i=0;i<count;i++) {
             Node n=new Node(in.readUTF()); n.mapId=in.readInt(); n.scanned=in.readBoolean(); n.village=in.readBoolean();
             n.minLevel=in.readInt(); n.maxLevel=in.readInt(); int size=in.readInt();
+            // Old ranges included unverified objects. Preserve navigation, relearn levels once.
+            if(version==2 || n.village || n.minLevel<=0 || n.maxLevel<n.minLevel
+                    || version==3 && GoBackAtlas.reportedBadRange(n.key,n.minLevel,n.maxLevel)) {
+                n.minLevel=0;n.maxLevel=0;
+            }
+            if(version<5 && (n.mapId==73 || n.key.equals("vinh caribe")) && n.minLevel==1){n.minLevel=0;n.maxLevel=0;}
+            if(n.mapId==25){n.minLevel=41;n.maxLevel=44;}
             if(size<0 || size>256) throw new IOException("exit count");
             for(int j=0;j<size;j++) {
                 int to=in.readInt(),x=in.readInt(),y=in.readInt(),npc=in.readInt();

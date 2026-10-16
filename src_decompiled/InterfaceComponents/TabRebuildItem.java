@@ -323,14 +323,14 @@ extends MainTabNew {
                 String string = "";
                 int n4 = 0;
                 mVector mVector2 = new mVector("TabRebuildItem menu");
-                if (this.isEquipmentRebuild()) mVector2.addElement(new iCommand("Tự cường hóa...", 90, this));
+                if (this.isEquipmentRebuild()) mVector2.addElement(new iCommand("Auto", 90, this));
                 if (TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].priceCoin != 0) {
-                    mVector2.addElement(new iCommand(T.coin, 2, 0, (AvMain)this));
+                    mVector2.addElement(new iCommand(T.coin.substring(0, 1).toUpperCase() + T.coin.substring(1), 2, 0, (AvMain)this));
                     string = T.dapbangxu + MainItem.getDotNumber(TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].priceCoin) + " " + T.coin + "?";
                     ++n4;
                 }
                 if (TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].priceGold != 0) {
-                    mVector2.addElement(new iCommand(T.gem, 2, 1, (AvMain)this));
+                    mVector2.addElement(new iCommand(T.gem.substring(0, 1).toUpperCase() + T.gem.substring(1), 2, 1, (AvMain)this));
                     string = T.dapbangxu + TabRebuildItem.dataRebuild[TabRebuildItem.itemRe.tier].priceGold + " " + T.gem + "?";
                     ++n4;
                 }

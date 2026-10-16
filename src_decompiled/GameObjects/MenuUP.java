@@ -234,10 +234,8 @@ public class MenuUP {
             if (sGname != null && sGname.trim().length() > 0) {
                 farmMapName = sGname.trim();
             }
-            String sStone = CRes.loadRMSString("hso_up_goback_stone");
-            if (sStone != null && sStone.trim().length() > 0) {
-                GoBackNavigator.prioritizeStone = sStone.trim().equals("1");
-            }
+            // Stone + walking is the GoBack routing policy; ignore legacy off flags.
+            GoBackNavigator.prioritizeStone = true;
             MedalFilter.loadConfig();
             AutoSellManager.loadConfig();
         }
@@ -478,6 +476,7 @@ public class MenuUP {
     }
 
     public static boolean handleSingleDialog(String string, iCommand iCommand2) {
+        if (iCommand2 == null && AutoPetFeed.handleFeedNotice(string)) return true;
         loadConfig();
         mVector farmOptions = new mVector("Farm dialog");
         if (iCommand2 != null) farmOptions.addElement(iCommand2);
@@ -626,12 +625,13 @@ public class MenuUP {
             return false;
         }
         loadConfig();
-        if (isGoBackEnabled && !isGoBackPaused && isGoBackActive && farmMapId == GameCanvas.loadmap.idMap && farmArea >= 0) {
-            if (LoadMap.Area == farmArea) {
+        int returnArea = AutoFarmSupport.goBackArea(farmArea);
+        if (isGoBackEnabled && !isGoBackPaused && isGoBackActive && farmMapId == GameCanvas.loadmap.idMap && returnArea >= 0) {
+            if (LoadMap.Area == returnArea) {
                 GameCanvas.menu2.doCloseMenu();
                 return true;
             }
-            int target = farmArea;
+            int target = returnArea;
             if (target >= items.size()) {
                 GameCanvas.addInfoCharCline("Map ch\u1ec9 c\u00f3 " + items.size() + " khu; gi\u1eef Khu " + (LoadMap.Area + 1));
                 GameCanvas.menu2.doCloseMenu();
@@ -964,11 +964,12 @@ public class MenuUP {
         }
 
         AutoPetFeed.update();
-        AutoSellManager.update();
         GoBackProfile.bind();
         GoBackNavigator.observe();
+        AutoSellManager.update();
+        AutoLoot.update();
         rememberFarmLocation();
-        if (isGoBackEnabled && !AutoSellManager.isReturningToSell && AutoSellManager.getQueueCount() == 0
+        if (isGoBackEnabled && !AutoSellManager.isReturningToSell && !AutoSellManager.isApproachingShop && AutoSellManager.getQueueCount() == 0
                 && farmMapId >= 0 && GameCanvas.currentScreen == GameCanvas.game
                 && GameScreen.player != null && GameScreen.player.Action != 4 && GameScreen.player.hp > 0) {
             updateGoBack();
@@ -1001,7 +1002,7 @@ public class MenuUP {
     }
 
     private static void updateAutoAttack() {
-        if (isGoBackActive) {
+        if (isGoBackActive || AutoSellManager.isReturningToSell || AutoSellManager.isApproachingShop || AutoSellManager.getQueueCount()>0 || AutoFarmSupport.isApproachingArea()) {
             return;
         }
         Player player = GameScreen.player;
@@ -1663,6 +1664,10 @@ public class MenuUP {
         if (mapId >= 0 && T.mapName != null && mapId < T.mapName.length && T.mapName[mapId] != null && T.mapName[mapId].length() > 0) {
             return T.mapName[mapId];
         }
+        String atlasName = GoBackAtlas.getMapName(mapId);
+        if (atlasName != null && atlasName.length() > 0) {
+            return atlasName;
+        }
         return "Map " + mapId;
     }
 
@@ -1678,12 +1683,16 @@ public class MenuUP {
             if (found >= 0) return -1;
             found = i;
         }
+        if (found < 0) {
+            found = GoBackAtlas.mapIdForName(wanted);
+        }
         return found;
     }
 
     private static long lastFarmSaveTime = 0L;
     private static boolean farmLocationDirty = false;
     private static boolean resumeNativeAutoFire = false;
+    private static boolean goBackTraveled = false;
 
     private static void stopGoBackMovement() {
         GoBackNavigator.stop();
@@ -1727,6 +1736,9 @@ public class MenuUP {
     }
 
     private static void beginGoBack() {
+        if (GameCanvas.loadmap != null && GameCanvas.loadmap.idMap != farmMapId) {
+            goBackTraveled = true;
+        }
         if (!isGoBackActive) {
             resumeNativeAutoFire = Player.isAutoFire == 1 || Player.isCurAutoFire;
             GoBackNavigator.start();
@@ -1741,6 +1753,7 @@ public class MenuUP {
     public static void resumeGoBackAfterSell() {
         if (!isGoBackEnabled || farmMapId < 0) return;
         isGoBackActive = false;
+        goBackTraveled = true;
         beginGoBack();
     }
 
@@ -1748,6 +1761,9 @@ public class MenuUP {
         if (!isGoBackEnabled || farmMapId < 0 || isGoBackPaused || !GoBackNavigator.ready()) return;
         Player player = GameScreen.player;
         if (player.hp <= 0 || player.Action == 4) return;
+        if (GameCanvas.loadmap != null && GameCanvas.loadmap.idMap != farmMapId) {
+            goBackTraveled = true;
+        }
         if (GameCanvas.loadmap.idMap == farmMapId && !isGoBackActive
                 && !GoBackNavigator.needsReturn()) return;
         beginGoBack();
@@ -1762,7 +1778,10 @@ public class MenuUP {
             if (farmArea < 0) farmArea = LoadMap.Area;
             farmMapName = GoBackNavigator.currentName(); saveConfig();
         }
-        GameCanvas.addInfoCharCline("GoBack: Da ve " + farmMapName + " - Khu " + (LoadMap.Area + 1));
+        if (goBackTraveled) {
+            GameCanvas.addInfoCharCline("GoBack: Da ve " + farmMapName + " - Khu " + (LoadMap.Area + 1));
+            goBackTraveled = false;
+        }
         isAutoAttack = true;
         Player.isAutoFire = 1;
         Player.isCurAutoFire = true;
@@ -1775,6 +1794,7 @@ public class MenuUP {
     public static void cancelGoBack() {
         isGoBackActive = false;
         isGoBackPaused = true;
+        goBackTraveled = false;
         goBackStepInfo = "";
         stopGoBackMovement();
         GameCanvas.addInfoCharCline("H\u1ee7y GoBack! (T\u1ea1m d\u1eebng)");
@@ -1820,8 +1840,10 @@ public class MenuUP {
         farmY = y;
         farmArea = area;
         isGoBackEnabled = true;
+        goBackTraveled = true;
         beginGoBack();
-        GoBackNavigator.start();
+        GoBackNavigator.startMapSelection();
+        GameCanvas.menu2.isShowMenu=false;
         isGoBackPaused = false;
         saveConfig();
         GameCanvas.addInfoCharCline("[HONG PHUC HSO] \u0110\u00e3 ch\u1ecdn Map UP: " + farmMapName + "! \u0110ang di chuy\u1ec3n...");
@@ -1833,6 +1855,7 @@ public class MenuUP {
             return;
         }
         isGoBackEnabled = true;
+        goBackTraveled = true;
         beginGoBack();
         GoBackNavigator.start();
         isGoBackPaused = false;
@@ -1843,6 +1866,7 @@ public class MenuUP {
     public static void clearGoBackLocation() {
         loadConfig();
         stopGoBackMovement();
+        goBackTraveled = false;
         farmMapId = -1;
         farmMapName = "";
         farmX = 0;
@@ -1857,12 +1881,24 @@ public class MenuUP {
     public static void showSelectFarmMapMenu() {
         mVector mVector2 = new mVector("Menu Chon Map UP");
 
-        // Only offer maps actually observed with monsters. No fake coordinates or levels.
-        for (int i = 0; i < GoBackNavigator.graph.nodes.size(); ++i) {
-            GoBackRoutes.Node node = GoBackNavigator.graph.get(i);
-            if (node.mapId < 0 || node.maxLevel <= 0) continue;
-            final int mapId = node.mapId;
-            String label = getMapName(mapId) + " (Lv " + node.minLevel + "-" + node.maxLevel + ")";
+        mVector sorted=new mVector();
+        for(int i=0;i<GoBackNavigator.graph.nodes.size();i++){
+            GoBackRoutes.Node node=GoBackNavigator.graph.get(i);
+            if(!GoBackAtlas.listMap(node))continue;
+            int at=0;
+            while(at<sorted.size()){
+                GoBackRoutes.Node other=(GoBackRoutes.Node)sorted.elementAt(at);
+                int level=GoBackAtlas.listLevel(node),otherLevel=GoBackAtlas.listLevel(other);
+                if(level<otherLevel || (level==otherLevel && node.mapId<other.mapId))break;
+                at++;
+            }
+            sorted.insertElementAt(node,at);
+        }
+        for(int i=0;i<sorted.size();i++){
+            GoBackRoutes.Node node=(GoBackRoutes.Node)sorted.elementAt(i);
+            final int mapId=node.mapId;
+            String name=GoBackAtlas.mapRole(mapId).length()>0?GoBackAtlas.MAP_NAMES[mapId]:getMapName(mapId);
+            String label=GoBackAtlas.listLabel(node,name);
             mVector2.addElement(new iCommand(label, new IAction() {
                 public void perform() {
                     setFarmMap(mapId, -1, -1, (byte)-1);
@@ -1898,17 +1934,6 @@ public class MenuUP {
     public static void showGoBackAdvancedMenu() {
         loadConfig();
         mVector mVector2 = new mVector("Menu GoBack Nang Cao");
-
-        String strStone = GoBackNavigator.prioritizeStone ? "\u01afu ti\u00ean \u0111\u00e1 d\u1ecbch chuy\u1ec3n: B\u1eacT" : "\u01afu ti\u00ean \u0111\u00e1 d\u1ecbch chuy\u1ec3n: T\u1eaeT";
-        mVector2.addElement(new iCommand(strStone, new IAction(){
-
-            public void perform() {
-                GoBackNavigator.prioritizeStone = !GoBackNavigator.prioritizeStone;
-                saveConfig();
-                GameCanvas.addInfoCharCline("\u01afu ti\u00ean \u0111\u00e1 d\u1ecbch chuy\u1ec3n: " + (GoBackNavigator.prioritizeStone ? "B\u1eacT" : "T\u1eaeT"));
-                showGoBackAdvancedMenu();
-            }
-        }));
 
         mVector2.addElement(new iCommand("L\u01b0u Khu hi\u1ec7n t\u1ea1i (Khu " + (LoadMap.Area + 1) + ")", new IAction(){
 
@@ -2035,6 +2060,7 @@ public class MenuUP {
         Player.autoItem = null;
         AutoChat.isAutoChat = false;
         AutoSellManager.stopAll();
+        AutoLoot.stopAll();
         AutoFarmSupport.stopAll();
         AutoPetFeed.stopAll();
         if (AutoUpgrade.active) AutoUpgrade.stop("Đã tắt tất cả auto");
@@ -2085,9 +2111,9 @@ public class MenuUP {
         }));
 
         // 3. Cach ve lang (Relog hoac GoBack di bo)
-        String sRet = AutoSellManager.returnMethod == 0 
-            ? "C\u00e1ch v\u1ec1 l\u00e0ng: Tho\u00e1t v\u00e0o l\u1ea1i (Relog)" 
-            : "C\u00e1ch v\u1ec1 l\u00e0ng: \u0110i b\u1ed9 GoBack";
+        String sRet = AutoSellManager.returnMethod == 0
+            ? "Cách về làng: Đi bộ + đá dịch chuyển"
+            : "Cách về làng: Bùa về làng";
         mVector2.addElement(new iCommand(sRet, new IAction(){
             public void perform() {
                 AutoSellManager.cycleReturnMethod();
@@ -2109,13 +2135,6 @@ public class MenuUP {
             }
         }));
 
-        // 5. Ban rac ngay lap tuc
-        mVector2.addElement(new iCommand("B\u00e1n r\u00e1c ngay l\u1eadp t\u1ee9c (1 ch\u1ea1m)", new IAction(){
-            public void perform() {
-                AutoSellManager.manualSellTrashNow();
-            }
-        }));
-
         // 6. Quay lai
         mVector2.addElement(new iCommand("Quay l\u1ea1i", new IAction(){
             public void perform() {
@@ -2133,14 +2152,6 @@ public class MenuUP {
         mVector2.addElement(new iCommand(sW, new IAction(){
             public void perform() {
                 AutoSellManager.toggleSellWhite();
-                showSellColorMenu();
-            }
-        }));
-
-        String sG = AutoSellManager.isSellGreen ? "B\u00e1n \u0111\u1ed3 xanh l\u00e1: B\u1eacT" : "B\u00e1n \u0111\u1ed3 xanh l\u00e1: T\u1eaeT";
-        mVector2.addElement(new iCommand(sG, new IAction(){
-            public void perform() {
-                AutoSellManager.toggleSellGreen();
                 showSellColorMenu();
             }
         }));
@@ -2201,15 +2212,6 @@ public class MenuUP {
         mVector2.addElement(new iCommand(sUp, new IAction(){
             public void perform() {
                 AutoSellManager.toggleSellUpgraded();
-                showSellOptionsAdvMenu();
-            }
-        }));
-
-        long del = AutoSellManager.delaySellMs;
-        String sDel = "Delay b\u00e1n: " + (del / 1000) + "." + ((del % 1000) / 100) + "s (" + del + "ms)";
-        mVector2.addElement(new iCommand(sDel, new IAction(){
-            public void perform() {
-                AutoSellManager.cycleDelaySell();
                 showSellOptionsAdvMenu();
             }
         }));
@@ -2306,8 +2308,8 @@ public class MenuUP {
 
     public static void showInventoryMenu() {
         mVector menu = new mVector("Tui do");
-        menu.addElement(new iCommand("Cường hóa: " + enabled(AutoUpgrade.active) + " >", new IAction() {
-            public void perform() { AutoUpgradeMenu.show(null); }
+        menu.addElement(new iCommand("Nhặt đồ theo màu >", new IAction(){
+            public void perform(){AutoLoot.show();}
         }));
         menu.addElement(new iCommand("Bán đồ: " + enabled(AutoSellManager.isAutoSellEnabled) + " >", new IAction() {
             public void perform() { showAutoSellMenu(); }
@@ -2379,6 +2381,9 @@ public class MenuUP {
         }));
         menu.addElement(new iCommand("Bảng trạng thái: " + (hudVisible ? "Hiện" : "Ẩn"), new IAction() {
             public void perform() { showInfo(); showUtilitiesMenu(); }
+        }));
+        menu.addElement(new iCommand("Thông tin [HONG PHUC]", new IAction() {
+            public void perform() { AutoChat.showInfo(); }
         }));
         menu.addElement(new iCommand("Quay lại", new IAction() {
             public void perform() { showMenu(); }

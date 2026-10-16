@@ -1,0 +1,10 @@
+Manifest-Version: 1.0
+MIDlet-Name: HONG PHUC HSO x10
+MIDlet-Vendor: HONG PHUC HSO
+MIDlet-Version: 1.0.0
+MIDlet-1: HSO x10,/icon.png,multi.MultiMidlet
+MicroEdition-Configuration: CLDC-1.1
+MicroEdition-Profile: MIDP-2.0
+Multi-Slots: 10
+MIDlet-Jar-URL: KnightOnline_v403_x10.jar
+MIDlet-Jar-Size: 11251354
