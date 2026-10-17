@@ -246,6 +246,11 @@ extends MainObject {
                 }
                 this.frameLeg = CRes.random(0, 4);
             }
+            if (MenuUP.isMonsterFocusOnly() && !isAutoAttackTarget(GameScreen.ObjFocus)) {
+                if (this.KillFire != -1) cancelStandingChase();
+                GameScreen.ObjFocus = null;
+                this.nextMonster();
+            }
             if (MenuUP.shouldStandStill() && this.KillFire != -1
                 && GameScreen.ObjFocus != null && GameScreen.ObjFocus.typeObject == 1) {
                 cancelStandingChase();
@@ -578,6 +583,29 @@ extends MainObject {
         return false;
     }
 
+    public static boolean isAutoAttackTarget(MainObject target) {
+        return target != null && target.typeObject == 1 && target.typeBoss == 0
+            && target.Action != 4 && !target.isDie && !target.isRemove && !target.isSend
+            && !target.isLuaThieng() && !target.isNPC() && !target.isNPC_server()
+            && !target.isMonstervantieu() && !target.isMonsterHouse() && !target.isItemBox()
+            && target.typeMonster != 7 && target.typeMonster != 16 && target.canFocus()
+            && !isExcludedFarmBossName(target.name);
+    }
+
+    private static boolean isExcludedFarmBossName(String name) {
+        // Some bosses arrive with typeBoss == 0. Match full name words as well.
+        String normalized = " " + MenuUP.stripAccents(name) + " ";
+        return normalized.indexOf(" bo cap chua ") >= 0
+            || normalized.indexOf(" quy mot mat ") >= 0
+            || normalized.indexOf(" xa nu ") >= 0
+            || normalized.indexOf(" de vang ") >= 0
+            || normalized.indexOf(" quy dau bo ") >= 0
+            || normalized.indexOf(" de bac ") >= 0
+            || normalized.indexOf(" ky si dia nguc ") >= 0
+            || normalized.indexOf(" nhen chua ") >= 0
+            || normalized.indexOf(" giant skeleton ") >= 0;
+    }
+
     public void cancelStandingChase() {
         this.KillFire = -1;
         this.IDAttack = -1;
@@ -616,13 +644,14 @@ extends MainObject {
         }
         long l = System.currentTimeMillis();
         MainObject mainObject = GameScreen.ObjFocus;
-        if (mainObject == null || mainObject.Action == 4 || mainObject.typeObject != 1 || mainObject.isSend || mainObject.isDie || !canReachStanding(mainObject)) {
+        if (mainObject == null || mainObject.Action == 4 || mainObject.typeObject != 1 || mainObject.isSend || mainObject.isDie || !canReachStanding(mainObject) || (MenuUP.isMonsterFocusOnly() && !isAutoAttackTarget(mainObject))) {
             if (mainObject != null && mainObject.isDie) {
                 GameScreen.ObjFocus = null;
             }
             this.nextMonster();
         }
-        if (GameScreen.ObjFocus == null || GameScreen.ObjFocus.typeObject != 1 || GameScreen.ObjFocus.typeBoss == 2) {
+        if (GameScreen.ObjFocus == null || GameScreen.ObjFocus.typeObject != 1 || GameScreen.ObjFocus.typeBoss == 2
+            || (MenuUP.isMonsterFocusOnly() && !isAutoAttackTarget(GameScreen.ObjFocus))) {
             return;
         }
         if (isAutoBuff == 1 && (l - this.timeAutoBuff) / (long)ListSkill.limitTimeAtt > 2L) {
@@ -670,7 +699,7 @@ extends MainObject {
         for (int i = 0; i < GameScreen.Vecplayers.size(); ++i) {
             int n2;
             MainObject mainObject2 = (MainObject)GameScreen.Vecplayers.elementAt(i);
-            if (mainObject2 == null || mainObject2.Action == 4 || mainObject2.isSend || mainObject2.typeObject != 1 || mainObject2.isLuaThieng() || mainObject2.isDie || mainObject2.isRemove || !canReachStanding(mainObject2) || (n2 = MainObject.getDistance(this.x, this.y, mainObject2.x, mainObject2.y)) >= n && mainObject2.typeBoss != 2) continue;
+            if (mainObject2 == null || mainObject2.Action == 4 || mainObject2.isSend || mainObject2.typeObject != 1 || mainObject2.isLuaThieng() || mainObject2.isDie || mainObject2.isRemove || (MenuUP.isMonsterFocusOnly() && !isAutoAttackTarget(mainObject2)) || !canReachStanding(mainObject2) || (n2 = MainObject.getDistance(this.x, this.y, mainObject2.x, mainObject2.y)) >= n && mainObject2.typeBoss != 2) continue;
             n = n2;
             mainObject = mainObject2;
             if (mainObject2.typeBoss == 2) break;
@@ -680,7 +709,7 @@ extends MainObject {
             GameScreen.ObjFocus = mainObject;
             demUnFire = 0;
         } else {
-            if (MenuUP.shouldStandStill()) GameScreen.ObjFocus = null;
+            if (MenuUP.shouldStandStill() || MenuUP.isMonsterFocusOnly()) GameScreen.ObjFocus = null;
             PaintInfoGameScreen.isPaintInfoFocus = false;
             demUnFire = (short)(demUnFire + 1);
         }
@@ -802,6 +831,13 @@ extends MainObject {
     }
 
     public void setFocus() {
+        if (MenuUP.isMonsterFocusOnly()) {
+            if (!isAutoAttackTarget(GameScreen.ObjFocus)) {
+                GameScreen.ObjFocus = null;
+                this.nextMonster();
+            }
+            return;
+        }
         if (isAutoFire == 1) {
             return;
         }
@@ -913,6 +949,10 @@ extends MainObject {
     }
 
     public void nextFocus() {
+        if (MenuUP.isMonsterFocusOnly()) {
+            this.nextMonster();
+            return;
+        }
         MainObject mainObject;
         int n;
         if (GameScreen.ObjFocus != null && GameScreen.ObjFocus.typeBoss == 2) {
@@ -1101,6 +1141,7 @@ extends MainObject {
     }
 
     public void setStartSkill(int n, boolean bl) {
+        if (MenuUP.isMonsterFocusOnly() && !isAutoAttackTarget(GameScreen.ObjFocus)) return;
         if (!canAttackStanding(n, GameScreen.ObjFocus)) return;
         this.posTransRoad = null;
         if (GameScreen.ObjFocus == null) {

@@ -1,38 +1,31 @@
 {
   "source": "KnightOnline_v403.jar",
-  "source_sha256": "a17e71c72972f4171a117eaa4eba4fbf5e915a170f96dcbfd8df1ac13b484eb6",
-  "classes_per_slot": 364,
+  "source_sha256": "0998f66498d1084b7f20f33d96dad82f641a44f24ea0c9a4759e8e2ec6f80f98",
+  "classes_per_slot": 362,
   "builds": [
     {
       "file": "KnightOnline_v403_x2.jar",
       "slots": 2,
-      "bytes": 2693534,
-      "sha256": "cc6a7fba3e5ae37e7cfadaf7e45dcd436b0731199902865c084087ee703dd125"
+      "bytes": 2701505,
+      "sha256": "3b7b45d0a0da1936e44bd9ad5e16376cbe3add91290ceb37416bb40637bd3ec1"
     },
     {
       "file": "KnightOnline_v403_x3.jar",
       "slots": 3,
-      "bytes": 3763227,
-      "sha256": "52068993e0d8af2654afe94310063ffa81c6e49665c977a347da5581b25b963c"
+      "bytes": 3770066,
+      "sha256": "96b5b82ac2f437e4620af9a989d835a5baf76ead3a1aa41a8344103b7ac586e2"
     },
     {
       "file": "KnightOnline_v403_x5.jar",
       "slots": 5,
-      "bytes": 5902698,
-      "sha256": "2d29eb9a78920c748a8f31fe70ab0062ac00537ca6a125a20dc5174c7d85bc5c"
+      "bytes": 5907295,
+      "sha256": "794ba6ecdefc3c216bd068ad3145e4d0091a114721834affde6ed792fb98206c"
     },
     {
       "file": "KnightOnline_v403_x10.jar",
       "slots": 10,
-      "bytes": 11251354,
-      "sha256": "4ceceee489090518d876e4d9531dbbbbe8abad08bfbd8f54a93290ec4cac9833"
+      "bytes": 11250317,
+      "sha256": "1f1dc9a0c717cee1fcd7bde622ce5efcacd0df6ce830403d9c74248a33b87561"
     }
-  ],
-  "validation": {
-    "jvm_verification": "passed all 4 variants",
-    "session_and_rms_isolation": "passed all 4 variants",
-    "offline_lifecycle": "passed all 4 variants",
-    "android_device": "not tested",
-    "live_multi_account_login": "not tested"
-  }
+  ]
 }

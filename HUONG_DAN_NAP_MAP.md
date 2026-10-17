@@ -32,3 +32,7 @@ GoBack qua biển tự đi tới Mr Haku ở Thành phố cảng hoặc Cửa bi
 
 Danh sách chỉ giữ một mục Đấu Trường (Khu PK), map 36; các map trùng tên 46/87 vẫn được giữ trong dữ liệu đường đi. Cổng trắng hiển thị Ice Golem Lv124 và được xếp theo level 124.
 GoBack chọn đường kết hợp đá dịch chuyển tại map hiện tại với các chặng chạy bộ tới đích. Khi đá đã chọn không còn hiện diện, tự loại nhánh đá tạm thời và lập lại đường ngay, không dừng toàn bộ GoBack. Nếu menu đá chưa phản hồi sau 3 giây và có đường bộ hợp lệ, chuyển sang đi bộ. Khi đã gửi lệnh dịch chuyển, vẫn đợi server xác nhận trước khi gửi lệnh khác.
+
+## Dữ liệu đi kèm các bản mới — 17/10/2026
+
+Đã xuất dữ liệu map từ bản đơn và hai ô của bản x2 trong MicroEmulator. Bản đơn, x2, x3, x5 và x10 đều có cùng bản dữ liệu map theo server; mỗi ô nạp phần còn thiếu, giữ dữ liệu RMS hiện tại. Đây là bản chụp dữ liệu đã khảo sát, không tự đồng bộ những lần khảo sát tiếp theo giữa các ứng dụng. Không kèm tài khoản hoặc mật khẩu.

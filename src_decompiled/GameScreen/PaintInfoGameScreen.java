@@ -1493,6 +1493,11 @@ public class PaintInfoGameScreen {
             if (!(GameScreen.ObjFocus != null && GameScreen.ObjFocus.typeBoss == 2 || MainObject.getDistance(n, n2, GameScreen.player.x, GameScreen.player.y) > GameScreen.player.wFocus - 15 && GameScreen.player.Action != 4 || (mainObject = this.setObjectNear(n, n2)) == null || mainObject.typeObject == 1 || Player.isAutoFire != 1)) {
                 Player.setCurAutoFire();
             }
+            if (GameObjects.MenuUP.isMonsterFocusOnly() && mainObject != null
+                && !Player.isAutoAttackTarget(mainObject)) {
+                GameCanvas.isPointerSelect = false;
+                return;
+            }
             if (this.isTouchFocus && GameCanvas.isTouch) {
                 if (mainObject != null) {
                     if (!mainObject.canFocus()) {

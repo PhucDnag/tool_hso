@@ -233,6 +233,50 @@ public final class GoBackRoutes {
         return null;
     }
 
+    /** Fill gaps only: the player's current RMS observations take precedence. */
+    public void mergeSeed(GoBackRoutes seed) {
+        int[] ids=new int[seed.nodes.size()];
+        for(int i=0;i<ids.length;i++) {
+            Node src=seed.get(i);
+            ids[i]=src.key.startsWith("@portal") ? -1 : node(src.key,src.mapId);
+            if(ids[i]<0) continue;
+            Node dst=get(ids[i]);
+            if(!dst.scanned && src.scanned){dst.scanned=true;revision++;}
+            if(!dst.village && src.village){dst.village=true;revision++;}
+            if(dst.minLevel<=0 && src.minLevel>0 && !dst.village){
+                dst.minLevel=src.minLevel;dst.maxLevel=src.maxLevel;revision++;
+            }
+        }
+        for(int i=0;i<ids.length;i++) {
+            if(ids[i]<0)continue;
+            Node dst=get(ids[i]),src=seed.get(i);
+            for(int j=0;j<src.exits.size();j++) {
+                Exit e=(Exit)src.exits.elementAt(j);
+                if(ids[e.to]<0)continue;
+                boolean exists=false;
+                for(int k=0;k<dst.exits.size();k++) {
+                    Exit d=(Exit)dst.exits.elementAt(k);
+                    if(d.npc==e.npc && (e.npc==-1 ? d.x==e.x && d.y==e.y && (e.x>=0 && e.y>=0 || d.to==ids[e.to]) : d.to==ids[e.to])){exists=true;break;}
+                }
+                if(!exists){Exit added=exit(ids[i],ids[e.to],e.x,e.y,e.npc);added.confirmed=e.confirmed;}
+            }
+        }
+    }
+
+    public void loadBundled(String store) {
+        InputStream stream=GoBackRoutes.class.getResourceAsStream("/map_seed/"+store+".bin");
+        if(stream==null)return;
+        try {
+            DataInputStream in=new DataInputStream(stream);
+            int count=in.readInt();if(count<0 || count>64)return;
+            for(int i=0;i<count;i++) {
+                int length=in.readInt();if(length<8 || length>1048576)return;
+                byte[] bytes=new byte[length];in.readFully(bytes);mergeSeed(load(bytes));
+            }
+        }catch(IOException ex){/* Existing RMS remains usable if a seed is unavailable. */}
+        finally{try{stream.close();}catch(IOException ex){}}
+    }
+
     public byte[] save() throws IOException {
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();
         DataOutputStream out=new DataOutputStream(bytes);

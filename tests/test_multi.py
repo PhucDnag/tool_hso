@@ -28,6 +28,13 @@ public class VerifyMulti {
         Object[] sessions=new Object[slots];
         for(int i=0;i<slots;i++){
             String prefix="slot"+(i+1<10?"0":"")+(i+1)+".";
+            Class graphClass=Class.forName(prefix+"GameObjects.GoBackRoutes");
+            Object graph=graphClass.newInstance();
+            graphClass.getMethod("loadBundled",new Class[]{String.class}).invoke(graph,new Object[]{"hso_gb_routes_v5_c2588702"});
+            Vector nodes=(Vector)graphClass.getField("nodes").get(graph);
+            check(nodes.size()>=90,"missing bundled maps in slot");
+            int learned=0;for(int k=0;k<nodes.size();k++)if(nodes.elementAt(k).getClass().getField("minLevel").getInt(nodes.elementAt(k))>0)learned++;
+            check(learned>=10,"missing learned levels");
             Class network=Class.forName(prefix+"CLib.Session_ME");
             sessions[i]=network.getMethod("gI",new Class[0]).invoke(null,new Object[0]);
             for(int j=0;j<i;j++)check(sessions[i]!=sessions[j],"shared socket singleton");

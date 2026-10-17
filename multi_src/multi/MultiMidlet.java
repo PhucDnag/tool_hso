@@ -87,10 +87,22 @@ public final class MultiMidlet extends MIDlet implements CommandListener {
             canvas.drawBackground(g);
         }
     }
-    public static void badge(Graphics g,int width,int index){
-        g.translate(-g.getTranslateX(),-g.getTranslateY());g.setClip(0,0,width,22);
-        g.setColor(0x342718);g.fillRect(width-86,0,86,22);g.setColor(0xffdd88);
-        g.drawString("Nick "+(index+1)+"/"+slots.length,width-3,2,Graphics.TOP|Graphics.RIGHT);
+    public static int badgeX(int width){return Math.max(0,width-54);}
+    public static int badgeY(int height){return Math.max(0,Math.min(height-34,height/3-12));}
+    public static boolean hitBadge(int x,int y,int width,int height){
+        int left=badgeX(width),top=badgeY(height);
+        return x>=left && x<left+50 && y>=top && y<top+30;
+    }
+    public static void badge(Graphics g,int width,int height,int index){
+        g.translate(-g.getTranslateX(),-g.getTranslateY());g.setClip(0,0,width,height);
+        int x=badgeX(width),y=badgeY(height);
+        g.setColor(0x172a20);g.fillRoundRect(x,y,50,30,8,8);
+        g.setColor(0xcaa65b);g.drawRoundRect(x,y,49,29,8,8);
+        g.setColor(0x607746);g.drawLine(x+6,y+2,x+43,y+2);
+        g.setFont(Font.getFont(Font.FACE_SYSTEM,Font.STYLE_BOLD,Font.SIZE_SMALL));
+        g.setColor(0xffe8ad);g.drawString("ACC",x+25,y+3,Graphics.TOP|Graphics.HCENTER);
+        g.setFont(Font.getFont(Font.FACE_SYSTEM,Font.STYLE_PLAIN,Font.SIZE_SMALL));
+        g.setColor(0xffffff);g.drawString((index+1)+"/"+slots.length,x+25,y+16,Graphics.TOP|Graphics.HCENTER);
     }
     public void commandAction(Command command,Displayable source){
         if(command==quit){

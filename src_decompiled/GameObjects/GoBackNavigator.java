@@ -118,6 +118,7 @@ public final class GoBackNavigator {
             store=rms;
             try { graph=GoBackRoutes.load(CRes.loadRMS(store)); }
             catch(Exception ex) { graph=new GoBackRoutes(); }
+            graph.loadBundled(store);
             GoBackAtlas.seed(graph);
             armed=null; selected=null; plan=null; readyLastTick=false;
             seenMap=-1; current=-1; savedRevision=-1;

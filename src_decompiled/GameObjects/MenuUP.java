@@ -1023,7 +1023,7 @@ public class MenuUP {
         }
 
         // 2. Neu chua co muc tieu hoac muc tieu da chet -> Tim quai moi
-        if (GameScreen.ObjFocus == null || GameScreen.ObjFocus.Action == 4 || GameScreen.ObjFocus.isDie || GameScreen.ObjFocus.typeObject != 1) {
+        if (!Player.isAutoAttackTarget(GameScreen.ObjFocus)) {
             player.nextMonster();
         }
 
@@ -1276,6 +1276,12 @@ public class MenuUP {
         } else if (autoReviveMode == 2) {
             string = "T\u1ea1i Ch\u1ed7";
         }
+    }
+
+    public static boolean isMonsterFocusOnly() {
+        return isAutoAttack && !isGoBackActive && !AutoSellManager.isReturningToSell
+            && !AutoSellManager.isApproachingShop && AutoSellManager.getQueueCount() == 0
+            && !AutoFarmSupport.isApproachingArea() && !AutoUpgrade.active;
     }
 
     public static boolean shouldStandStill() {

@@ -69,7 +69,7 @@ def hooked_sources():
     canvas = change(canvas, 'implements Runnable {',
                     'implements Runnable, multi.BackgroundCanvas {\n    public volatile boolean running=true;\n    private boolean nickTouch;\n    private long lastBackgroundPaint;')
     canvas = change(canvas, '        gamecanvas.paint(tem);',
-                    '        gamecanvas.paint(tem);\n        multi.MultiMidlet.badge(graphics,getWidth(),TemMidlet.slot);')
+                    '        gamecanvas.paint(tem);\n        multi.MultiMidlet.badge(graphics,getWidth(),getHeight(),TemMidlet.slot);')
     canvas = change(canvas, 'protected void paint(Graphics graphics)', 'protected synchronized void paint(Graphics graphics)')
     start = canvas.index('    public void run() {')
     end = canvas.index('    protected void keyPressed', start)
@@ -99,7 +99,7 @@ def hooked_sources():
 
 ''' + canvas[end:]
     canvas = change(canvas, '        gamecanvas.pointerPressed(n, n2);',
-                    '        nickTouch=n>=getWidth()-86 && n2<22;\n        if(nickTouch){multi.MultiMidlet.showMenu();return;}\n        gamecanvas.pointerPressed(n, n2);')
+                    '        nickTouch=multi.MultiMidlet.hitBadge(n,n2,getWidth(),getHeight());\n        if(nickTouch){multi.MultiMidlet.showMenu();return;}\n        gamecanvas.pointerPressed(n, n2);')
     canvas = change(canvas, '        gamecanvas.pointerDragged(n, n2);',
                     '        if(nickTouch)return;\n        gamecanvas.pointerDragged(n, n2);')
     canvas = change(canvas, '        gamecanvas.pointerReleased(n, n2);',

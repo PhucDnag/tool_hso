@@ -1,0 +1,34 @@
+[
+  {
+    "source": "C:\\Users\\phucd\\.microemulator\\suite-KnightOnline Midlet Suite\\hso_gb_routes_v5_c2588702.rs",
+    "store": "hso_gb_routes_v5_c2588702",
+    "format": 5,
+    "nodes": 101,
+    "bytes": 36100,
+    "sha256": "977c90ff6b9fbcfdc8fa24e301e11acfe843e9ed48991e617bc8ab98c4cfdd1a"
+  },
+  {
+    "source": "C:\\Users\\phucd\\.microemulator\\suite-HONG PHUC HSO x2\\s0_hso_gb_routes_v5_c2588702.rs",
+    "store": "hso_gb_routes_v5_c2588702",
+    "format": 5,
+    "nodes": 100,
+    "bytes": 9026,
+    "sha256": "d3240e05d6dd98ddd08e2a00e5cebe1ee4495b94b0bf4046504a53548974083a"
+  },
+  {
+    "source": "C:\\Users\\phucd\\.microemulator\\suite-HONG PHUC HSO x2\\s1_hso_gb_routes_v5_c2588702.rs",
+    "store": "hso_gb_routes_v5_c2588702",
+    "format": 5,
+    "nodes": 99,
+    "bytes": 7204,
+    "sha256": "e8b286d49d60b991d967e806714750aee9b67170df8b9e95444bbd7e7dee568e"
+  },
+  {
+    "source": "C:\\Users\\phucd\\.microemulator\\suite-KnightOnline Midlet Suite\\hso_gb_routes_v5_c25886fe.rs",
+    "store": "hso_gb_routes_v5_c25886fe",
+    "format": 2,
+    "nodes": 100,
+    "bytes": 15073,
+    "sha256": "5783200568f13a4c19f2e3b972027bd3b2de3f96b4f5c0a0ea9f084975b75fe8"
+  }
+]

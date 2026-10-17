@@ -85,6 +85,11 @@ def build():
             rel = os.path.relpath(full, BUILD_DIR).replace(os.sep, "/")
             new_files[rel] = full
 
+    seed_dir = os.path.join(ROOT_DIR, "map_seed")
+    for name in os.listdir(seed_dir):
+        if name.endswith(".bin"):
+            new_files["map_seed/" + name] = os.path.join(seed_dir, name)
+
     with zipfile.ZipFile(ORIG_JAR, "r") as zin, zipfile.ZipFile(MOD_JAR, "w", zipfile.ZIP_DEFLATED) as zout:
         for item in zin.infolist():
             name = item.filename

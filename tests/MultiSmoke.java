@@ -13,6 +13,16 @@ public class MultiSmoke {
         try{
             Headless.main(new String[]{args[0]});
             Class host=MIDletBridge.getCurrentMIDlet().getClass();
+            Method hit=host.getMethod("hitBadge",new Class[]{Integer.TYPE,Integer.TYPE,Integer.TYPE,Integer.TYPE});
+            if(!((Boolean)hit.invoke(null,new Object[]{new Integer(300),new Integer(125),new Integer(320),new Integer(360)})).booleanValue())throw new Exception("new button miss");
+            if(((Boolean)hit.invoke(null,new Object[]{new Integer(300),new Integer(5),new Integer(320),new Integer(360)})).booleanValue())throw new Exception("old hitbox remains");
+            if(args.length>1){
+                javax.microedition.lcdui.Image image=javax.microedition.lcdui.Image.createImage(320,360);
+                host.getMethod("badge",new Class[]{javax.microedition.lcdui.Graphics.class,Integer.TYPE,Integer.TYPE,Integer.TYPE}).invoke(null,new Object[]{image.getGraphics(),new Integer(320),new Integer(360),new Integer(0)});
+                int[] rgb=new int[60*42];image.getRGB(rgb,0,60,260,102,60,42);
+                java.awt.image.BufferedImage preview=new java.awt.image.BufferedImage(60,42,java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                preview.setRGB(0,0,60,42,rgb,0,60);javax.imageio.ImageIO.write(preview,"png",new java.io.File(args[1]));
+            }
             Field count=host.getDeclaredField("slots");count.setAccessible(true);
             Object[] slots=(Object[])count.get(null);
             Field errorsField=host.getDeclaredField("errors");errorsField.setAccessible(true);

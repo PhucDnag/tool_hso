@@ -15,7 +15,7 @@ Các ô nick chưa mở không khởi tạo game, không mở kết nối. Bạn
 ## Dữ liệu và cấu hình
 
 - Kết nối, nhân vật, auto và dữ liệu lưu được tách theo từng ô nick.
-- Bản ghép tạo dữ liệu mới; không tự sao chép tài khoản hay dữ liệu map từ bản đơn. Mỗi ô nick giữ dữ liệu riêng qua các lần mở lại bản ghép đó.
+- Bản đơn và các bản x2/x3/x5/x10 có sẵn dữ liệu map đã khảo sát, xuất từ MicroEmulator ngày 17/10/2026: server có bộ dữ liệu đầy đủ gồm 101 map, 74 map đã khảo sát và 61 khoảng level. Dữ liệu được nạp theo đúng server và chỉ bổ sung phần còn thiếu; dữ liệu hiện có của từng nick được ưu tiên. Không sao chép tài khoản, mật khẩu hoặc vị trí UP cá nhân. Server còn lại có dữ liệu đường đi định dạng cũ; level chưa xác thực được bỏ để học lại.
 - Xóa dữ liệu trong một nick chỉ xử lý dữ liệu thuộc nick đó. Gỡ ứng dụng game ghép hoặc xóa dữ liệu từ J2ME Loader có thể ảnh hưởng toàn bộ các nick của bản ghép.
 - Các bản x2/x3/x5/x10 là các ứng dụng riêng; không tự đồng bộ dữ liệu giữa chúng.
 - Lệnh thoát trong game đưa về danh sách nick; dùng **Thoát tất cả** trong danh sách để kết thúc toàn bộ ứng dụng.
@@ -24,7 +24,7 @@ Các ô nick chưa mở không khởi tạo game, không mở kết nối. Bạn
 
 Tài nguyên ảnh/âm thanh trong JAR chỉ lưu một bản. Trạng thái game và bộ nhớ khi chạy vẫn tăng theo số nick đã mở; x10 không có nghĩa là dùng RAM như một nick.
 
-Vòng cập nhật game giữ mục tiêu 25 lần/giây cho mỗi nick. Phiên không hiển thị vẽ vào một bộ đệm ảnh dùng chung tối đa khoảng 5 lần/giây; giai đoạn lên thuyền vẫn vẽ theo nhịp cập nhật để giữ logic gốc. Tốc độ thực tế phụ thuộc thiết bị và server. Nút đổi nick chiếm vùng 86 × 22 pixel ở góc trên phải.
+Vòng cập nhật game giữ mục tiêu 25 lần/giây cho mỗi nick. Phiên không hiển thị vẽ vào một bộ đệm ảnh dùng chung tối đa khoảng 5 lần/giây; giai đoạn lên thuyền vẫn vẽ theo nhịp cập nhật để giữ logic gốc. Tốc độ thực tế phụ thuộc thiết bị và server. Nút **ACC** viền vàng, nền xanh đậm ở mép phải, khoảng 1/3 chiều cao màn hình; kích thước 50 × 30 pixel. Dòng dưới hiển thị ô hiện tại/tổng số ô. Bấm để mở danh sách nick.
 
 Nên thử x2 trước, tăng dần số nick nếu máy vẫn ổn định. Để ứng dụng ở phía trước khi cần các nick tiếp tục hoạt động; Android hoặc trình giả lập có thể tạm dừng ứng dụng khi chuyển sang ứng dụng khác hay tắt màn hình. Không cam kết chạy nền qua cơ chế tiết kiệm pin của Android.
 

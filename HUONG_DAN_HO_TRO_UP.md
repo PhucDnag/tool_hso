@@ -26,3 +26,9 @@ Không gửi lặp yêu cầu trả phí khi kết quả chưa rõ. Menu lạ đ
 Mở **AUTO → Đứng im khi đánh: Bật**, rồi bật **Đánh quái**. Nhân vật chỉ chọn quái trong tầm kỹ năng, không tự đuổi quái hoặc chạy về điểm bắt đầu khi chờ quái. Tắt mục này để đánh và di chuyển như trước. Lựa chọn được lưu khi thoát game; **Tắt tất cả** cũng tắt mục này.
 
 GoBack, đi bán đồ và đi đổi khu vẫn được phép di chuyển. Người chơi vẫn có thể di chuyển thủ công. Đã kiểm tra build và logic bằng mô phỏng; chưa kiểm thử trên server thật.
+
+## Mục tiêu khi bật Đánh quái
+
+Auto chỉ chọn quái thường còn sống, bỏ qua các loại boss, nhân vật, NPC, lửa thiêng, xe vận tiêu và đối tượng đặc biệt như rương/nhà. Không có quái hợp lệ trong phạm vi thì bỏ focus và chờ. Nút chuyển mục tiêu và chạm đối tượng cũng áp dụng bộ lọc khi auto đánh đang hoạt động. Tắt Đánh quái để chọn mục tiêu thủ công như trước. GoBack, đi bán đồ, đổi khu và cường hóa được nhường quyền tương tác trong khi thực hiện tác vụ.
+
+Auto đánh còn loại trừ theo tên: **Bò Cạp Chúa, Quỷ Một Mắt, Xà Nữ, Dê Vàng, Quỷ Đầu Bò, Dê Bạc, Kỵ Sĩ Địa Ngục, Nhện Chúa, Giant Skeleton**, kể cả khi server không gắn cờ boss. Bộ lọc bỏ qua hoa/thường, dấu tiếng Việt và nhận diện tên có nhãn/level kèm theo. Đã kiểm thử chọn quái thường thay boss ở gần hơn và bỏ focus khi chỉ còn boss.

@@ -7,4 +7,4 @@ MicroEdition-Configuration: CLDC-1.1
 MicroEdition-Profile: MIDP-2.0
 Multi-Slots: 10
 MIDlet-Jar-URL: KnightOnline_v403_x10.jar
-MIDlet-Jar-Size: 11251354
+MIDlet-Jar-Size: 11250317

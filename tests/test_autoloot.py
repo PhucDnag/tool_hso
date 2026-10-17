@@ -3,7 +3,7 @@ import os, subprocess, tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 source=(ROOT/'src_decompiled/GameObjects/Player.java').read_text(encoding='utf-8')
-methods=source[source.index('    private void autoGetItem()'):source.index('    public void cancelStandingChase()')]
+methods=source[source.index('    private void autoGetItem()'):source.index('    public static boolean isAutoAttackTarget(')]
 stubs={
  'CLib/mVector.java':'package CLib;public class mVector extends java.util.Vector {}',
  'GameObjects/MainObject.java':"""package GameObjects;public class MainObject {
