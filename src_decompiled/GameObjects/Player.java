@@ -246,6 +246,10 @@ extends MainObject {
                 }
                 this.frameLeg = CRes.random(0, 4);
             }
+            if (MenuUP.shouldStandStill() && this.KillFire != -1
+                && GameScreen.ObjFocus != null && GameScreen.ObjFocus.typeObject == 1) {
+                cancelStandingChase();
+            }
             this.updateActionPerson();
             if (this.currentQuest == null) {
                 this.setFocus();
@@ -467,7 +471,7 @@ extends MainObject {
                     this.dofire();
                 }
             }
-            if (this.Action != 2 && this.Action != 4 && (MainObject.getDistance(this.x, this.y, xBeginAutoFire, yBeginAutofire) > this.wFocus * 3 / 2 || demUnFire > 100)) {
+            if (!MenuUP.shouldStandStill() && this.Action != 2 && this.Action != 4 && (MainObject.getDistance(this.x, this.y, xBeginAutoFire, yBeginAutofire) > this.wFocus * 3 / 2 || demUnFire > 100)) {
                 this.toX = this.x;
                 this.toY = this.y;
                 this.xStopMove = xBeginAutoFire;
@@ -524,7 +528,6 @@ extends MainObject {
         for (n = 0; n < GameScreen.Vecplayers.size(); ++n) {
             MainObject mainObject = (MainObject)GameScreen.Vecplayers.elementAt(n);
             if (mainObject == null || mainObject.isSend || mainObject.typeObject != 4 && mainObject.typeObject != 3 && mainObject.typeObject != 5 && mainObject.typeObject != 7) continue;
-            if (mainObject.typeObject == 3) continue; // Equipment pickup is owned by AutoLoot.
             if (this.setGetItem(mainObject) && MainObject.getDistance(this.x, this.y, mainObject.x, mainObject.y) < this.wFocus) {
                 GlobalService.gI().Get_Item_Map((short)mainObject.ID, mainObject.typeObject);
             }
@@ -575,6 +578,36 @@ extends MainObject {
         return false;
     }
 
+    public void cancelStandingChase() {
+        this.KillFire = -1;
+        this.IDAttack = -1;
+        this.vecObjFocusSkill = null;
+        this.posTransRoad = null;
+        this.countAutoMove = 0;
+        this.xStopMove = this.yStopMove = 0;
+        this.toX = this.x;
+        this.toY = this.y;
+        this.vx = this.vy = 0;
+        if (this.Action == 1) this.Action = 0;
+    }
+
+    public boolean canAttackStanding(int skillId, MainObject target) {
+        return !MenuUP.shouldStandStill() || target == null || target.typeObject != 1
+            || MainObject.getDistance(this.x, this.y, target.x, target.y - target.hOne / 4) <= MainListSkill.getRange(skillId);
+    }
+
+    private boolean canReachStanding(MainObject target) {
+        if (canAttackStanding(0, target)) return true;
+        for (int i = 0; i < mhotkey[levelTab].length; i++) {
+            HotKey key = mhotkey[levelTab][i];
+            if (key != null && key.type == HotKey.SKILL
+                && MainListSkill.getSkillFormId(key.id) != null
+                && MainListSkill.getSkillFormId(key.id).typeSkill == 0
+                && canAttackStanding(key.id, target)) return true;
+        }
+        return false;
+    }
+
     public void setAutoFire() {
         Object object;
         int n;
@@ -583,7 +616,7 @@ extends MainObject {
         }
         long l = System.currentTimeMillis();
         MainObject mainObject = GameScreen.ObjFocus;
-        if (mainObject == null || mainObject.Action == 4 || mainObject.typeObject != 1 || mainObject.isSend || mainObject.isDie) {
+        if (mainObject == null || mainObject.Action == 4 || mainObject.typeObject != 1 || mainObject.isSend || mainObject.isDie || !canReachStanding(mainObject)) {
             if (mainObject != null && mainObject.isDie) {
                 GameScreen.ObjFocus = null;
             }
@@ -604,7 +637,7 @@ extends MainObject {
         if (IndexFire < mhotkey[0].length - 1) {
             for (n = IndexFire + 1; n < mhotkey[0].length; ++n) {
                 object = mhotkey[levelTab][n];
-                if (((HotKey)object).type != HotKey.SKILL || !this.setDelaySkill(((HotKey)object).id, -1)) continue;
+                if (((HotKey)object).type != HotKey.SKILL || !this.setDelaySkill(((HotKey)object).id, -1) || !canAttackStanding(((HotKey)object).id, GameScreen.ObjFocus)) continue;
                 this.setActionHotKey(n, false);
                 timeFristSkill = l;
                 IndexFire = (byte)n;
@@ -614,14 +647,14 @@ extends MainObject {
         if (IndexFire > 0) {
             for (n = 0; n <= IndexFire; ++n) {
                 object = mhotkey[levelTab][n];
-                if (((HotKey)object).type != HotKey.SKILL || !this.setDelaySkill(((HotKey)object).id, -1)) continue;
+                if (((HotKey)object).type != HotKey.SKILL || !this.setDelaySkill(((HotKey)object).id, -1) || !canAttackStanding(((HotKey)object).id, GameScreen.ObjFocus)) continue;
                 this.setActionHotKey(n, false);
                 timeFristSkill = l;
                 IndexFire = (byte)n;
                 return;
             }
         }
-        if (this.setDelaySkill(0, -1)) {
+        if (this.setDelaySkill(0, -1) && canAttackStanding(0, GameScreen.ObjFocus)) {
             this.setActionHotKey(-1, false);
             timeFristSkill = l;
         }
@@ -637,7 +670,7 @@ extends MainObject {
         for (int i = 0; i < GameScreen.Vecplayers.size(); ++i) {
             int n2;
             MainObject mainObject2 = (MainObject)GameScreen.Vecplayers.elementAt(i);
-            if (mainObject2 == null || mainObject2.Action == 4 || mainObject2.isSend || mainObject2.typeObject != 1 || mainObject2.isLuaThieng() || (n2 = MainObject.getDistance(this.x, this.y, mainObject2.x, mainObject2.y)) >= n && mainObject2.typeBoss != 2) continue;
+            if (mainObject2 == null || mainObject2.Action == 4 || mainObject2.isSend || mainObject2.typeObject != 1 || mainObject2.isLuaThieng() || mainObject2.isDie || mainObject2.isRemove || !canReachStanding(mainObject2) || (n2 = MainObject.getDistance(this.x, this.y, mainObject2.x, mainObject2.y)) >= n && mainObject2.typeBoss != 2) continue;
             n = n2;
             mainObject = mainObject2;
             if (mainObject2.typeBoss == 2) break;
@@ -647,6 +680,7 @@ extends MainObject {
             GameScreen.ObjFocus = mainObject;
             demUnFire = 0;
         } else {
+            if (MenuUP.shouldStandStill()) GameScreen.ObjFocus = null;
             PaintInfoGameScreen.isPaintInfoFocus = false;
             demUnFire = (short)(demUnFire + 1);
         }
@@ -1067,6 +1101,7 @@ extends MainObject {
     }
 
     public void setStartSkill(int n, boolean bl) {
+        if (!canAttackStanding(n, GameScreen.ObjFocus)) return;
         this.posTransRoad = null;
         if (GameScreen.ObjFocus == null) {
             return;

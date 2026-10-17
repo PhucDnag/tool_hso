@@ -58,6 +58,7 @@ public class MenuUP {
 
     // 3. Auto Đánh Quái (Tự động đánh và focus vào quái)
     public static boolean isAutoAttack = false;
+    public static boolean isStandStill = false;
 
     // 4. Auto Bơm HP / MP
     public static boolean isAutoHpMp = false;
@@ -140,6 +141,8 @@ public class MenuUP {
             if (sAtt != null && sAtt.trim().length() > 0) {
                 isAutoAttack = sAtt.trim().equals("1");
             }
+
+            isStandStill = "1".equals(CRes.loadRMSString("hso_up_standstill"));
 
             // Load Auto HP/MP
             String sHpMp = CRes.loadRMSString("hso_up_autohpmp");
@@ -255,6 +258,7 @@ public class MenuUP {
                 CRes.saveRMSString_("hso_up_lastcharid", String.valueOf(lastCharId));
             }
             CRes.saveRMSString_("hso_up_autoattack", isAutoAttack ? "1" : "0");
+            CRes.saveRMSString_("hso_up_standstill", isStandStill ? "1" : "0");
             CRes.saveRMSString_("hso_up_autohpmp", isAutoHpMp ? "1" : "0");
             CRes.saveRMSString_("hso_up_hp_percent", String.valueOf(autoHpPercent));
             CRes.saveRMSString_("hso_up_mp_percent", String.valueOf(autoMpPercent));
@@ -967,7 +971,6 @@ public class MenuUP {
         GoBackProfile.bind();
         GoBackNavigator.observe();
         AutoSellManager.update();
-        AutoLoot.update();
         rememberFarmLocation();
         if (isGoBackEnabled && !AutoSellManager.isReturningToSell && !AutoSellManager.isApproachingShop && AutoSellManager.getQueueCount() == 0
                 && farmMapId >= 0 && GameCanvas.currentScreen == GameCanvas.game
@@ -1273,6 +1276,22 @@ public class MenuUP {
         } else if (autoReviveMode == 2) {
             string = "T\u1ea1i Ch\u1ed7";
         }
+    }
+
+    public static boolean shouldStandStill() {
+        return isStandStill && (isAutoAttack || Player.isAutoFire == 1)
+            && !isGoBackActive && !AutoSellManager.isReturningToSell
+            && !AutoSellManager.isApproachingShop && AutoSellManager.getQueueCount() == 0
+            && !AutoFarmSupport.isApproachingArea() && !AutoUpgrade.active;
+    }
+
+    public static void toggleStandStill() {
+        loadConfig();
+        isStandStill = !isStandStill;
+        if (shouldStandStill() && GameScreen.player != null) {
+            GameScreen.player.cancelStandingChase();
+        }
+        saveConfig();
     }
 
     public static void toggleAutoAttack() {
@@ -2046,7 +2065,7 @@ public class MenuUP {
         reviveState = 0;
         isReviveCancelled = true;
         isCheckingGoldRevive = false;
-        isAutoAttack = isAutoHpMp = false;
+        isAutoAttack = isAutoHpMp = isStandStill = false;
         autoMountType = 0;
         isGoBackEnabled = isGoBackActive = false;
         isGoBackPaused = true;
@@ -2060,7 +2079,6 @@ public class MenuUP {
         Player.autoItem = null;
         AutoChat.isAutoChat = false;
         AutoSellManager.stopAll();
-        AutoLoot.stopAll();
         AutoFarmSupport.stopAll();
         AutoPetFeed.stopAll();
         if (AutoUpgrade.active) AutoUpgrade.stop("Đã tắt tất cả auto");
@@ -2078,7 +2096,7 @@ public class MenuUP {
             || Player.isAutoFire > -1 || Player.isAutoHPMP || Player.isAutoBuff == 1 || Player.autoItem != null
             || isAutoReconnect
             || autoReviveMode > 0
-            || isAutoAttack
+            || isAutoAttack || isStandStill
             || isAutoHpMp
             || autoMountType > 0
             || AutoSellManager.isAutoSellEnabled
@@ -2291,6 +2309,9 @@ public class MenuUP {
         menu.addElement(new iCommand("Đánh quái: " + enabled(isAutoAttack), new IAction() {
             public void perform() { toggleAutoAttack(); showMenu(); }
         }));
+        menu.addElement(new iCommand("Đứng im khi đánh: " + enabled(isStandStill), new IAction() {
+            public void perform() { toggleStandStill(); showMenu(); }
+        }));
         menu.addElement(new iCommand("HP/MP: " + enabled(isAutoHpMp) + " >", new IAction() {
             public void perform() { showHpMpMenu(); }
         }));
@@ -2308,7 +2329,7 @@ public class MenuUP {
 
     public static void showInventoryMenu() {
         mVector menu = new mVector("Tui do");
-        menu.addElement(new iCommand("Nhặt đồ theo màu >", new IAction(){
+        menu.addElement(new iCommand("Nhặt vật phẩm >", new IAction(){
             public void perform(){AutoLoot.show();}
         }));
         menu.addElement(new iCommand("Bán đồ: " + enabled(AutoSellManager.isAutoSellEnabled) + " >", new IAction() {

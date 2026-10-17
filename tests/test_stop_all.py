@@ -13,7 +13,7 @@ body = '''
 package GameObjects;
 public class StopAllTest {
 static boolean isAutoReconnect=true,isWaitingReconnect=true,isReconnectingChar=true,isCheckingGoldRevive=true;
-static boolean isReviveCancelled,isAutoAttack=true,isAutoHpMp=true,isGoBackEnabled=true,isGoBackActive=true,isGoBackPaused,resumeNativeAutoFire=true;
+static boolean isReviveCancelled,isStandStill=true,isAutoAttack=true,isAutoHpMp=true,isGoBackEnabled=true,isGoBackActive=true,isGoBackPaused,resumeNativeAutoFire=true;
 static int autoReviveMode=2,reviveState=1,autoMountType=1,farmMapId=5;
 static long timeTargetReconnect=123;
 static String goBackStepInfo="moving";
@@ -36,6 +36,7 @@ public static void main(String[] args){
 }
 class GoBackProfile {static void bind(){}}
 class Player {static int isAutoFire=1,isAutoBuff=1;static boolean isCurAutoFire=true,isAutoHPMP=true;static Object autoItem=new Object();}
+class AutoLoot {static void stopAll(){}}
 class AutoChat {static boolean isAutoChat=true;}
 class AutoSellManager {static boolean isAutoSellEnabled=true;static int stops;static void stopAll(){stops++;isAutoSellEnabled=false;}}
 class AutoFarmSupport {static boolean zoneEnabled=true,fireEnabled=true,oilEnabled=true,bookEnabled=true;static int stops;static void stopAll(){stops++;zoneEnabled=fireEnabled=oilEnabled=bookEnabled=false;}}

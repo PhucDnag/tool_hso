@@ -20,3 +20,9 @@ Bật lại lửa/dầu/sách sau **Tắt tất cả** sẽ chạy bình thườ
 Không gửi lặp yêu cầu trả phí khi kết quả chưa rõ. Menu lạ được giữ để người dùng xử lý; trạng thái hiển thị ở bảng góc trái. Vật phẩm không có cập nhật số lượng sau 15 giây sẽ tự tắt mục tương ứng, không dùng liên tiếp.
 
 Đã kiểm thử bằng phản hồi server mô phỏng; chưa kiểm thử trên tài khoản/server thật.
+
+## Đứng im khi đánh quái
+
+Mở **AUTO → Đứng im khi đánh: Bật**, rồi bật **Đánh quái**. Nhân vật chỉ chọn quái trong tầm kỹ năng, không tự đuổi quái hoặc chạy về điểm bắt đầu khi chờ quái. Tắt mục này để đánh và di chuyển như trước. Lựa chọn được lưu khi thoát game; **Tắt tất cả** cũng tắt mục này.
+
+GoBack, đi bán đồ và đi đổi khu vẫn được phép di chuyển. Người chơi vẫn có thể di chuyển thủ công. Đã kiểm tra build và logic bằng mô phỏng; chưa kiểm thử trên server thật.
